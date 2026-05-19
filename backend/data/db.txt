@@ -1,0 +1,7 @@
+DROP TYPE IF EXISTS email_urgency CASCADE;
+
+CREATE TYPE email_urgency AS ENUM ('info', 'urgent', 'action_required', 'nil');
+
+ALTER TABLE email ADD COLUMN urgency email_urgency NOT NULL DEFAULT 'nil';
+
+This code was used to generate the specific type for email_urgency.
