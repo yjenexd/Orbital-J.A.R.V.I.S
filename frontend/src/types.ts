@@ -1,10 +1,10 @@
 export interface User {
-    id: string;
+    id: number;
     name: string;
 }
 
 export interface CalendarEvent {
-    event_id: string;
+    event_id: number;
     date: string;
     time: string;
     event: string;
@@ -15,16 +15,18 @@ export interface CalendarEvent {
 export type UserSchedule = CalendarEvent[];
 
 export interface Task {
-    task_id: string;
+    task_id: number;
     task: string;
     origin: string;
     deadline: string;
     status:boolean;
     user_id: number;
+    priority: number;
+    email_id?: number | null;
 }
 
 export interface Email {
-    email_id: string; // int8
+    email_id: number; // int8
     date: string;     // timestamp
     sender: string;
     summary: string;
@@ -33,6 +35,3 @@ export interface Email {
     urgency: 'low' | 'medium' | 'high'; // Custom email_urgency type
 }
 
-
-//tasks needs a priority field
-//need to add an email_id field to task to link tasks to emails (for email follow-up tasks)
