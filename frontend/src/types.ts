@@ -35,10 +35,17 @@ export interface Email {
     urgency: 'low' | 'medium' | 'high'; // Custom email_urgency type
 }
 
+/**
+ * Represents a single message bubble in the chat interface.
+ */
 export interface ChatMessage {
+  /** Unique identifier for the message */  
   id: string;
+  /** The text content of the message */
   text: string;
+  /** Identifies whether the message is from the human or the AI */
   sender: 'user' | 'system';
+  /** Unix timestamp of when the message was created */
   timestamp: number;
 }
 

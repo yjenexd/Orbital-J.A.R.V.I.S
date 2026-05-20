@@ -3,60 +3,82 @@ import { Chat, Send } from '@mui/icons-material';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatMessage } from '../types';
 
+/**
+ * A fixed-size conversational UI panel that renders a scrollable message chain.
+ * Currently operates with localized state to track user inputs and mock AI replies.
+ * 
+ * @component
+ * @example
+ * // Usage in a parent layout:
+ * return (
+ *   <Box sx={{ p: 2 }}>
+ *     <ChatInterface />
+ *   </Box>
+ * )
+ */
+
 export function ChatInterface() {
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      text: 'Hello! I am your AI secretary. How can I assist you today?',
-      sender: 'system',
-      timestamp: Date.now(),
-    },
-    {
-      id: '2', 
-      text: 'Can you schedule a meeting with the marketing team tomorrow at 3 PM?',
-      sender: 'user',
-      timestamp: Date.now(),
-    },
-    {
-      id: '3',
-      text: 'Sure! I have scheduled a meeting with the marketing team for tomorrow at 3 PM.',
-      sender: 'system',
-      timestamp: Date.now(),
-    },
-    {
-      id: '4',
-      text: 'Great, thank you!',
-      sender: 'user',
-      timestamp: Date.now(),
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]); //local state to hold the conversation history, initialized as an empty array
+  const [isTyping, setIsTyping] = useState(false); //state to track if the AI is currently "typing" a response, used to disable input and show loading indicators if needed
 
   const messageEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }); //checks if the ref is attached to a DOM element, and if so, scrolls it into view with a smooth animation
-  }, [messages]); //watches the messages array, scrolls to bottom whenever a new message is added
+  }, [messages, isTyping]); //watches the messages array, scrolls to bottom whenever a new message is added
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => { //read the input value and update the state
     setInputText(event.target.value);
   }
 
-  const handleSendAction = () => { // add the user's message to the chat and clear the input
+  const handleSendAction = async () => { //pairs with await, simulates sending the user input to the backend and receiving a response
+    const trimmedInput = inputText.trim(); //clean the string
 
-    if (!inputText.trim()) return; // prevent sending empty messages
-    
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      {
-        id: Date.now().toString(),
-        text: inputText,
-        sender: 'user',
-        timestamp: Date.now(),
+    if(!trimmedInput || isTyping) return; 
+
+    //1. Add users message to the UI
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(), //using timestamp as a simple unique ID for messages
+      sender: 'user',
+      text: trimmedInput,
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]); //append the new message to the existing arrray of Messages
+    setInputText(''); 
+
+    //2. turn on the loading indicator while waiting for the response
+    setIsTyping(true); 
+    try {
+      //3. Send data to the Python backend
+      const response = await fetch('http://localhost:8000/chat', {  //"Use the HTTP protocol to talk to a service running on my own computer, specifically looking at apartment 8000, and deliver this request to the '/chat' department."
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, //label for pacakge, data is in JSON format
+        body: JSON.stringify({ message: trimmedInput }), //turns data into {"message": "the user's text"}
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.statusText}`);
       }
-    ]);
-    setInputText('');
-  }
+      const data = await response.json();
+
+      //4. Append AI response to UI
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          text: data.reply,
+          sender: 'system',
+          timestamp: Date.now(),
+        }
+      ]);
+      } catch (error) {
+        console.error("Error communicating with the backend:", error);
+      } finally {
+        setIsTyping(false);
+      }
+    }
 
   const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => { //handle pressing Enter key to send message
     if (event.key === 'Enter') handleSendAction();
@@ -74,6 +96,7 @@ export function ChatInterface() {
           </Typography>
         </Box>
         
+        {/* THIS IS THE SCROLLABLE CHA HISTORY */}
         <Box
           sx={{
             flex: 1,
@@ -84,7 +107,9 @@ export function ChatInterface() {
             mb: 2,
           }}
         >
+          {/* creates a bubble for every saved message */}
           {messages.map((message, index) => (
+            //invisible bubble that pushes bubble to left or right
             <Box
               key={index}
               sx={{
@@ -92,6 +117,7 @@ export function ChatInterface() {
                 justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
               }}
             >
+              {/* The actual colored message bubble with a shadow */}
               <Paper
                 elevation={1}
                 sx={{
@@ -101,12 +127,25 @@ export function ChatInterface() {
                   color: message.sender === 'user' ? 'primary.contrastText' : 'text.primary',
                 }}
               >
+                {/* The text inside the bubble */}
                 <Typography variant="body2">{message.text}</Typography>
               </Paper>
             </Box>
           ))}
+
+          {/* THE LOADING BUBBLE: Only shows up when waiting for the backend */}
+          {isTyping && (
+            <Box sx = {{display: 'flex', justifyContent: 'flex-start' }}>
+              <Paper elevation={1} sx={{}}>
+                 <Typography variant = "body2">
+                  J².A.R.V.I.S is typing...
+                 </Typography>
+              </Paper>
+            </Box>
+          )}
           <div ref={messageEndRef} /> {/* dummy div to scroll into view */}
         </Box>
+
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
             fullWidth
@@ -116,11 +155,17 @@ export function ChatInterface() {
             placeholder="Type your command..."
             variant="outlined"
             onKeyPress ={handleKeyPress}
+            disabled = {isTyping} //locks field while AI is thinking
+            multiline
+            maxRows = {4} //stop growing after 4 lines, starts scrolling within the text field
           />
+
+          {/* paper airplane icon*/}
           <IconButton color="primary" sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }} onClick={handleSendAction}>
             <Send />
           </IconButton>
         </Box>
+
       </CardContent>
     </Card>
   );
