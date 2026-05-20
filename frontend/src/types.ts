@@ -35,3 +35,10 @@ export interface Email {
     urgency: 'low' | 'medium' | 'high'; // Custom email_urgency type
 }
 
+export interface ChatMessage {
+  id: string;
+  text: string;
+  sender: 'user' | 'system';
+  timestamp: number;
+}
+

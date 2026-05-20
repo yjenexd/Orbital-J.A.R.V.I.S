@@ -1,42 +1,79 @@
 import { Card, CardContent, Typography, Box, TextField, IconButton, Paper } from '@mui/material';
 import { Chat, Send } from '@mui/icons-material';
-import { useState } from 'react';
-
-interface Message {
-  sender: 'user' | 'ai';
-  text: string;
-}
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import type { ChatMessage } from '../types';
 
 export function ChatInterface() {
-  const [input, setInput] = useState('');
-  const [messages] = useState<Message[]>([
+  const [inputText, setInputText] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([
     {
+      id: '1',
+      text: 'Hello! I am your AI secretary. How can I assist you today?',
+      sender: 'system',
+      timestamp: Date.now(),
+    },
+    {
+      id: '2', 
+      text: 'Can you schedule a meeting with the marketing team tomorrow at 3 PM?',
       sender: 'user',
-      text: 'Push all my math tuition classes back by an hour tomorrow so I can study for my CS2040S exam',
+      timestamp: Date.now(),
     },
     {
-      sender: 'ai',
-      text: 'I\'ve rescheduled all your MA1521 tuition sessions for tomorrow, moving them from 2:00 PM to 3:00 PM. This clears your schedule from 2:00-3:00 PM for CS2040S exam preparation. Would you like me to send notifications to your tuition instructor?',
+      id: '3',
+      text: 'Sure! I have scheduled a meeting with the marketing team for tomorrow at 3 PM.',
+      sender: 'system',
+      timestamp: Date.now(),
     },
     {
+      id: '4',
+      text: 'Great, thank you!',
       sender: 'user',
-      text: 'Yes, please send the notification.',
-    },
-    {
-      sender: 'ai',
-      text: 'Done! Notification sent to your tuition instructor. I\'ve also blocked the 2:00-3:00 PM slot as "CS2040S Study Time" to prevent any scheduling conflicts.',
-    },
+      timestamp: Date.now(),
+    }
   ]);
 
+  const messageEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }); //checks if the ref is attached to a DOM element, and if so, scrolls it into view with a smooth animation
+  }, [messages]); //watches the messages array, scrolls to bottom whenever a new message is added
+
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => { //read the input value and update the state
+    setInputText(event.target.value);
+  }
+
+  const handleSendAction = () => { // add the user's message to the chat and clear the input
+
+    if (!inputText.trim()) return; // prevent sending empty messages
+    
+    setMessages((prevMessages) => [
+      ...prevMessages,
+      {
+        id: Date.now().toString(),
+        text: inputText,
+        sender: 'user',
+        timestamp: Date.now(),
+      }
+    ]);
+    setInputText('');
+  }
+
+  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => { //handle pressing Enter key to send message
+    if (event.key === 'Enter') handleSendAction();
+  }
+
+
   return (
-    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+    <Card sx={{ height: '600px', width: '400px', display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 3 , overflow: 'hidden' }}>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2}}>
           <Chat color="primary" />
           <Typography variant="h6" color="primary">
             Chat with your AI Secretary
           </Typography>
         </Box>
+        
         <Box
           sx={{
             flex: 1,
@@ -68,17 +105,19 @@ export function ChatInterface() {
               </Paper>
             </Box>
           ))}
+          <div ref={messageEndRef} /> {/* dummy div to scroll into view */}
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
             fullWidth
             size="small"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
+            value={inputText}
+            onChange={handleInputChange}
             placeholder="Type your command..."
             variant="outlined"
+            onKeyPress ={handleKeyPress}
           />
-          <IconButton color="primary" sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}>
+          <IconButton color="primary" sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }} onClick={handleSendAction}>
             <Send />
           </IconButton>
         </Box>
