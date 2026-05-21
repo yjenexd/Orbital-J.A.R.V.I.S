@@ -4,7 +4,7 @@ Welcome to the local testing environment for J.a.r.v.i.s. This project consists 
 
 Follow these steps to get both the UI and the AI engine running on your local machine.
 
-📋 Prerequisites
+Prerequisites
 Before you begin, ensure you have the following installed:
 
 Node.js & npm: For running the React frontend.
@@ -13,7 +13,7 @@ Python 3.8+: For running the FastAPI backend.
 
 A GitHub Account: To generate a free developer token for the AI model.
 
-🧠 Step 1: Set Up the AI Backend (Python)
+Step 1: Set Up the AI Backend (Python)
 The backend acts as the orchestrator, enforcing schedule constraints and communicating with the AI.
 
 1. Navigate to the backend directory
@@ -84,7 +84,7 @@ Bash
 npm run dev
 # Note: If this project uses Create React App instead of Vite, use `npm start`
 
-🚀 Step 3: Test the System
+Step 3: Test the System
 Open your browser and navigate to the local host address provided by your React terminal (usually http://localhost:3000 or http://localhost:5173).
 
 You should see the J.a.r.v.i.s Chat Interface.
