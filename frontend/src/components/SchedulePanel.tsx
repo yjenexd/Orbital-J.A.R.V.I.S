@@ -2,20 +2,97 @@ import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
 import { CalendarMonth, Warning, Shield } from '@mui/icons-material';
 
 interface ScheduleEvent {
+  event_id: number;
+  date: string;
   time: string;
-  title: string;
-  type: 'module' | 'meeting' | 'protected' | 'conflict';
+  event: string;
+  protected: boolean
+  user_id: number;
+}
+function detectConflicts(events: ScheduleEvent[]): Set<number> {
+  const grouped = new Map<string, number[]>();
+
+  for (const event of events) {
+    const key = new Date(event.time).toISOString();
+    grouped.set(key, [...(grouped.get(key) ?? []), event.event_id])
+  }
+
+  const conflicts = new Set<number>()
+  for (const ids of grouped.values()) {
+    if (ids.length > 1) ids.forEach(id => conflicts.add(id))
+  }
+
+  return conflicts
 }
 
 export function SchedulePanel() {
   const events: ScheduleEvent[] = [
-    { time: '09:00 AM', title: 'CS2040S - Data Structures', type: 'module' },
-    { time: '11:00 AM', title: 'CS2030S - Programming Methodology', type: 'module' },
-    { time: '02:00 PM', title: 'Project Meeting with Jason', type: 'conflict' },
-    { time: '02:00 PM', title: 'Private Tuition Slot', type: 'conflict' },
-    { time: '04:00 PM', title: 'MA1521 - Calculus', type: 'module' },
-    { time: '08:00 PM', title: 'CS2040S Revision', type: 'protected' },
-  ];
+	{
+		"event_id": 1,
+		"date": "2026-05-19",
+		"time": "09:00:00",
+		"event": "CS2040S - Data Structures",
+		"protected": false,
+		"user_id": 1
+	},
+	{
+		"event_id": 2,
+		"date": "2026-05-19",
+		"time": "11:00:00",
+		"event": "CS2030S - Programming Methodology",
+		"protected": false,
+		"user_id": 1
+	},
+	{
+		"event_id": 3,
+		"date": "2026-05-19",
+		"time": "14:00:00",
+		"event": "Project Meeting with Jason",
+		"protected": false,
+		"user_id": 1
+	},
+	{
+		"event_id": 4,
+		"date": "2026-05-19",
+		"time": "14:00:00",
+		"event": "Private Tuition Slot",
+		"protected": false,
+		"user_id": 1
+	},
+	{
+		"event_id": 5,
+		"date": "2026-05-19",
+		"time": "16:00:00",
+		"event": "MA1521 - Calculus",
+		"protected": false,
+		"user_id": 1
+	},
+	{
+		"event_id": 6,
+		"date": "2026-05-19",
+		"time": "20:00:00",
+		"event": "CS2040S Revision",
+		"protected": true,
+		"user_id": 1
+	},
+	{
+		"event_id": 7,
+		"date": "2026-05-19",
+		"time": "16:00:00",
+		"event": "Floorball practice",
+		"protected": false,
+		"user_id": 1
+	},
+	{
+		"event_id": 8,
+		"date": "2026-05-19",
+		"time": "11:00:00",
+		"event": "IS1108 Consultation",
+		"protected": false,
+		"user_id": 1
+	}
+];
+  const conflicts = detectConflicts(events);
 
   const getEventColor = (type: string) => {
     switch (type) {
@@ -30,9 +107,9 @@ export function SchedulePanel() {
     }
   };
 
-  const getEventIcon = (type: string) => {
-    if (type === 'conflict') return <Warning sx={{ fontSize: 16 }} />;
-    if (type === 'protected') return <Shield sx={{ fontSize: 16 }} />;
+  const getEventIcon = (eventId: number, isProtected: boolean) => {
+    if (conflicts.has(eventId)) return <Warning sx={{ fontSize: 16 }} />;
+    if (isProtected) return <Shield sx={{ fontSize: 16 }} />;
     return null;
   };
 
@@ -53,8 +130,8 @@ export function SchedulePanel() {
                 p: 1.5,
                 borderRadius: 1,
                 border: 1,
-                borderColor: event.type === 'conflict' ? 'error.main' : event.type === 'protected' ? 'success.main' : 'divider',
-                bgcolor: event.type === 'conflict' ? 'error.light' : event.type === 'protected' ? 'success.light' : 'action.hover',
+                borderColor: conflicts.has(event.event_id) ? 'error.main' : event.protected === true ? 'success.main' : 'divider',
+                bgcolor: conflicts.has(event.event_id) ? 'error.light' : event.protected === true ? 'success.light' : 'action.hover',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
@@ -64,8 +141,8 @@ export function SchedulePanel() {
                 {event.time}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                {getEventIcon(event.type)}
-                <Typography variant="body2">{event.title}</Typography>
+                {getEventIcon(event.event_id, event.protected)}
+                <Typography variant="body2">{event.event}</Typography>
               </Box>
             </Box>
           ))}
