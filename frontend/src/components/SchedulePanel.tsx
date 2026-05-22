@@ -13,16 +13,18 @@ function detectConflicts(events: ScheduleEvent[]): Set<number> {
   const grouped = new Map<string, number[]>();
 
   for (const event of events) {
-    const key = new Date(event.time).toISOString();
-    grouped.set(key, [...(grouped.get(key) ?? []), event.event_id])
+    // FIX: Combine the date and time strings to create a unique, valid key
+    const key = `${event.date}T${event.time}`; 
+    
+    grouped.set(key, [...(grouped.get(key) ?? []), event.event_id]);
   }
 
-  const conflicts = new Set<number>()
+  const conflicts = new Set<number>();
   for (const ids of grouped.values()) {
-    if (ids.length > 1) ids.forEach(id => conflicts.add(id))
+    if (ids.length > 1) ids.forEach(id => conflicts.add(id));
   }
 
-  return conflicts
+  return conflicts;
 }
 
 export function SchedulePanel() {
