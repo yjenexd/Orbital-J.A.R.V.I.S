@@ -45,7 +45,46 @@ client = AsyncOpenAI(
     api_key=os.getenv("GITHUB_TOKEN"),
 )
 
-@app.post("/chat")
+#New route: day at a glance briefing
+@app.get("/api/briefing") ##if anyone sends a GET request to this address, run the function below
+async def day_at_a_glance_briefing(): ##does not pause the entire backend, function becomes "coroutine", can be paused and resumed
+    mock_schedule = """
+    Current Date: Friday, May 22, 2026
+    Events:
+    - 10:00 AM: CS2040S Revision Session
+    - 2:00 PM: Orbital project sync with Jason
+    Pending Tasks:
+    - Finalize J.a.r.v.i.s frontend layout
+    """
+
+    briefing_prompt = f""" 
+    You are J.a.r.v.i.s. Review the following schedule and tasks. 
+    Formulate a brief, highly digestible cognitive system summary for the user to read upon waking up. 
+    Identify any upcoming conflict blocks or critical deadlines. 
+    Keep it encouraging, strictly under 4 sentences, and do not use greetings.
+    
+    Data:
+    {mock_schedule}
+    """
+
+    try:
+        response = await client.chat.completions.create(
+            model= "gpt-4o-mini",
+            messages=[ ##send the briefing brompt along with role to the AI
+                {"role": "system", "content": "You are a proactive AI secretary."}, ##role that sets the AI persona
+                {"role": "user", "content": briefing_prompt} ##users message
+            ]
+        )
+
+        briefing_text: str = response.choices[0].message.content ##pick the first response, go the messages content and pluck out the string
+        return {"briefing": briefing_text} #package briefing into JSON and sends it back to react
+    except Exception as e:
+        print(f"Error generating briefing: {str(e)}")
+        raise HTTPException(status_code = 500, detail="failed to initialize summary")
+    
+
+
+@app.post("/chat") ##if someone sends a post request to this address, run the function below
 async def chat_execution_engine(request: ChatRequest):
     try:
         # NEW: The OpenAI completion format
