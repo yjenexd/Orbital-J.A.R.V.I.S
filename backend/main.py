@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -5,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
 from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
+from supabase import create_client, Client
 
 load_dotenv()
 
@@ -87,39 +89,75 @@ client = AsyncOpenAI(
 #New route: day at a glance briefing
 @app.get("/api/briefing") ##if anyone sends a GET request to this address, run the function below
 async def day_at_a_glance_briefing(): ##does not pause the entire backend, function becomes "coroutine", can be paused and resumed
-    mock_schedule = """
-    Current Date: Friday, May 22, 2026
-    Events:
-    - 10:00 AM: CS2040S Revision Session
-    - 2:00 PM: Orbital project sync with Jason
-    Pending Tasks:
-    - Finalize J.a.r.v.i.s frontend layout
-    """
-
-    briefing_prompt = f""" 
-    You are J.a.r.v.i.s. Review the following schedule and tasks. 
-    Formulate a brief, highly digestible cognitive system summary for the user to read upon waking up. 
-    Identify any upcoming conflict blocks or critical deadlines. 
-    Keep it encouraging, strictly under 4 sentences, and do not use greetings.
-    
-    Data:
-    {mock_schedule}
-    """
-
     try:
-        response = await client.chat.completions.create(
+       
+       # TODO: Replace hardcoded user_id with dynamic auth context later
+        current_user_id = 1 
+        
+        # Get today's date formatted as YYYY-MM-DD to match your 'date' column type
+        today_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        #Fetch Today's schedule
+        schedule_res = supabase.table("schedule") \
+            .select("event_id, date, time, event, protected, users(name)") \
+            .eq("date", today_date) \
+            .eq("user_id", current_user_id) \
+            .execute()
+
+        # 2. Fetch Pending Tasks
+        tasks_res = supabase.table("tasks") \
+            .select("task_id, title, priority, deadline, source") \
+            .eq("completed", False) \
+            .eq("user_id", current_user_id) \
+            .execute()
+            
+        # 3. Fetch Emails 
+        email_res = supabase.table("email") \
+            .select("email_id, sender, subject, summary, urgency") \
+            .eq("user_id", current_user_id) \
+            .limit(5) \
+            .execute()
+       
+        if not schedule_res.data and not tasks_res.data and not email_res.data:
+              return {"briefing": "You have no scheduled events, pending tasks, or urgent emails for today. Enjoy your day!",
+                      "has_events": False}
+   
+        # Updated Prompt Engineering to handle the multi-table JSON structure
+        briefing_prompt = f""" 
+        You are J.a.r.v.i.s second brother, the daily briefing assistant. Review the following JSON payloads representing the user's day. 
+        
+        DATA STRUCTURE GUIDE:
+        - `Schedule`: Contains 'event' (description), 'time', and a relational 'users' array (who they are meeting with). 'protected' means it cannot be moved.
+        - `Tasks`: Contains 'title', 'deadline', and 'priority'.
+        - `Emails`: Contains recent inbox items with pre-generated summaries and 'urgency' levels.
+        
+        INSTRUCTIONS:
+        Formulate a brief, highly digestible cognitive system summary for the user to read upon waking up. 
+        Synthesize this data: mention who they are meeting with today, flag any high-priority tasks, and note if any emails require urgent attention.
+        Keep it encouraging, strictly under 5 sentences, and do not use greetings.
+        Properly format the briefing to be easily scannable, using bullet points if necessary. If there are no events, tasks, or emails, provide a positive message about having a clear day.
+        
+        LIVE DATABASE PAYLOAD:
+        Schedule: {schedule_res.data}
+        Pending Tasks: {tasks_res.data}
+        Emails: {email_res.data}
+        """
+
+        ai_response = await client.chat.completions.create(
             model= "gpt-4o-mini",
-            messages=[ ##send the briefing brompt along with role to the AI
-                {"role": "system", "content": "You are a proactive AI secretary."}, ##role that sets the AI persona
-                {"role": "user", "content": briefing_prompt} ##users message
+            messages=[
+                {"role": "system", "content": "You are a proactive AI secretary."},
+                {"role": "user", "content": briefing_prompt}
             ]
         )
 
-        briefing_text: str = response.choices[0].message.content ##pick the first response, go the messages content and pluck out the string
-        return {"briefing": briefing_text} #package briefing into JSON and sends it back to react
+        briefing_text = ai_response.choices[0].message.content
+        return {"briefing": briefing_text, "has_events": True}
+
     except Exception as e:
         print(f"Error generating briefing: {str(e)}")
-        raise HTTPException(status_code = 500, detail="failed to initialize summary")
+        raise HTTPException(status_code=500, detail="failed to initialize summary")
+
     
 
 

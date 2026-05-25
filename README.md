@@ -1,99 +1,73 @@
-J.a.r.v.i.s (Reactive Virtual Intelligence System)
+# J.a.r.v.i.s (Reactive Virtual Intelligence System)
 
-Welcome to the local testing environment for J.a.r.v.i.s. This project consists of a React frontend built with Material UI, powered by a Python FastAPI backend that routes requests to enterprise-grade Large Language Models via the GitHub Models API.
+Local development setup guide for the J.a.r.v.i.s React/FastAPI stack. This system uses GitHub Models (gpt-4o-mini) for routing.
 
-Follow these steps to get both the UI and the AI engine running on your local machine.
+## Prerequisites
+- Node.js & npm (Frontend)
+- Python 3.8+ (Backend)
+- GitHub Account (For LLM inference token)
 
-Prerequisites
-Before you begin, ensure you have the following installed:
+---
 
-Node.js & npm: For running the React frontend.
+## Step 1: Set Up the AI Backend (Python)
 
-Python 3.8+: For running the FastAPI backend.
+1. Navigate to the backend directory:
+   cd backend
 
-A GitHub Account: To generate a free developer token for the AI model.
+2. Create and activate a virtual environment:
+   # Mac/Linux:
+   python -m venv venv
+   source venv/bin/activate
+   
+   # Windows:
+   python -m venv venv
+   venv\Scripts\activate
 
-Step 1: Set Up the AI Backend (Python)
-The backend acts as the orchestrator, enforcing schedule constraints and communicating with the AI.
+3. Install dependencies (FastAPI, Uvicorn, and OpenAI SDK):
+   pip install fastapi uvicorn pydantic python-dotenv openai supabase
 
-1. Navigate to the backend directory
-Open a terminal and navigate into the backend folder:
+4. Configure AI inference token:
+   - Go to GitHub Settings > Developer settings > Personal access tokens > Tokens (classic).
+   - Generate a new token (no scopes required).
+   - Create a `.env` file in the root of the `backend` folder and add:
+     GITHUB_TOKEN=ghp_your_token_here
 
-Bash
-cd backend
-2. Create and activate a Virtual Environment
-This keeps the project dependencies isolated.
+5. Start the backend server:
+   uvicorn main:app --reload
 
-Mac/Linux:
+---
 
-Bash
-python -m venv venv
-source venv/bin/activate
+## Step 2: Set Up the Frontend (React)
 
-Windows:
+Open a second terminal instance.
 
-Bash
-python -m venv venv
-venv\Scripts\activate
+1. Navigate to the frontend directory:
+   cd frontend
 
-3. Install Dependencies
-With the virtual environment active (venv), install the required Python packages:
+2. Install dependencies:
+   npm install
 
-Bash
-pip install fastapi uvicorn pydantic python-dotenv openai
+3. Start the development server:
+   npm run dev
 
-4. Generate your free GitHub AI Token
-To allow J.a.r.v.i.s to think, you need a free testing token.
+---
 
-Log into GitHub and go to Settings > Developer settings > Personal access tokens > Tokens (classic).
+## Step 3: View the API Documentation
 
-Click Generate new token (classic).
+FastAPI automatically generates interactive API documentation based on the backend routing map. Ensure the backend server is running, then navigate to the following local URLs in your browser to view the endpoints:
 
-Give it a name (e.g., "Jarvis Testing"), set an expiration, and leave all permission checkboxes completely blank.
+- Interactive Swagger UI: http://localhost:8000/docs
+  (Use this interface to test API endpoints directly from the browser)
 
-Click Generate and copy the long ghp_... string.
+- Static ReDoc Reference: http://localhost:8000/redoc
+  (Provides a clean, readable layout of all API routes and expected JSON schemas)
 
-5. Configure your Environment Variables
-In the root of the backend folder, create a file named exactly .env. Paste your token inside it like this:
+- Raw OpenAPI Schema: http://localhost:8000/openapi.json
+  (Use this file to import the API structure into external tools like Postman)
 
-Plaintext
-GITHUB_TOKEN=ghp_your_copied_token_here
+---
 
-6. Start the Server
-Run the backend server. It will boot up on port 8000.
+## Troubleshooting
 
-Bash
-uvicorn main:app --reload
-💻 Step 2: Set Up the Frontend (React)
-Open a second, separate terminal window (leave the Python server running in the first one).
-
-1. Navigate to the frontend directory
-Go to the root of the React project:
-
-Bash
-cd frontend
-2. Install Node Modules
-Install the necessary React and Material UI dependencies:
-
-Bash
-npm install
-3. Start the UI Server
-Launch the development server:
-
-Bash
-npm run dev
-# Note: If this project uses Create React App instead of Vite, use `npm start`
-
-Step 3: Test the System
-Open your browser and navigate to the local host address provided by your React terminal (usually http://localhost:3000 or http://localhost:5173).
-
-You should see the J.a.r.v.i.s Chat Interface.
-
-Type a message, such as: "Can you schedule a meeting for me on June 5, 2026?"
-
-J.a.r.v.i.s should decline the request, citing an overseas trip to China, confirming that both the AI connection and the custom backend constraints are working perfectly!
-
-Troubleshooting
-"System offline" or "Bad Gateway" in the chat: Ensure your Python backend terminal is running and that your .env file is named correctly and placed inside the backend folder.
-
-UI styling looks broken: Ensure you ran npm install to grab the @mui/material packages.
+- Bad Gateway / System Offline: Verify the backend is running on port 8000 and the `.env` file is properly formatted in the backend root directory.
+- UI broken: Ensure `npm install` was run to install all `@mui/material` dependencies.
