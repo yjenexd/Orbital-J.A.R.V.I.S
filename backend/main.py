@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from supabase import create_client, Client
 from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
 
 load_dotenv()
@@ -16,6 +17,38 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"], 
 )
+
+supabase: Client = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
+
+@app.get("/tasks")
+async def get_tasks():
+    try:
+        data = supabase.table("tasks") \
+            .select("title, priority, source, deadline, completed") \
+            .eq("user_id", 1) \
+            .order("deadline", desc=False) \
+            .execute().data
+        return {"tasks": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.get("/schedule")
+async def get_schedule():
+    try:
+        data = supabase.table("schedule") \
+            .select("event_id, date, time, event, protected") \
+            .eq("user_id", 1) \
+            .order("date", desc=False) \
+            .order("time", desc=False) \
+            .execute().data
+        return {"schedule": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 class ChatRequest(BaseModel):
     message: str

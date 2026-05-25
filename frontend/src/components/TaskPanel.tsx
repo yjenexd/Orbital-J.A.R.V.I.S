@@ -1,5 +1,7 @@
 import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material';
 import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
+import { useEffect, useState } from "react"
+
 
 interface Task {
   title: string;
@@ -10,42 +12,13 @@ interface Task {
 }
 
 export function TaskPanel() {
-  const tasks: Task[] = [
-    {
-      title: 'Complete CS2040S Problem Set 3',
-      priority: 'high',
-      source: 'Email from Prof. Tan',
-      deadline: 'Tomorrow, 11:59 PM',
-      completed: false,
-    },
-    {
-      title: 'Prepare presentation for project meeting',
-      priority: 'high',
-      source: 'Manual entry',
-      deadline: 'Today, 2:00 PM',
-      completed: false,
-    },
-    {
-      title: 'Review lecture notes for MA1521',
-      priority: 'medium',
-      source: 'Conversation',
-      deadline: 'Friday',
-      completed: false,
-    },
-    {
-      title: 'Submit group project proposal',
-      priority: 'medium',
-      source: 'Email from team',
-      deadline: 'Next Monday',
-      completed: false,
-    },
-    {
-      title: 'Read Chapter 5 for CS2030S',
-      priority: 'low',
-      source: 'Manual entry',
-      completed: true,
-    },
-  ];
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/tasks")
+      .then(r => r.json())
+      .then(data => setTasks(data.tasks));
+  }, []);
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {
     switch (priority) {
@@ -59,15 +32,15 @@ export function TaskPanel() {
   };
 
   return (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+    <Card sx={{ display: 'flex', flexDirection: 'column', maxHeight: 600 }}>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexShrink: 0 }}>
           <CheckBox color="primary" />
           <Typography variant="h6" color="primary">
             Tasks & Personal Goals
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
           {tasks.map((task, index) => (
             <Box
               key={index}

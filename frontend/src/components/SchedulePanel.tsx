@@ -1,5 +1,6 @@
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
 import { CalendarMonth, Warning, Shield } from '@mui/icons-material';
+import { useEffect, useState } from 'react';
 
 interface ScheduleEvent {
   event_id: number;
@@ -7,7 +8,6 @@ interface ScheduleEvent {
   time: string;
   event: string;
   protected: boolean;
-  user_id: number;
 }
 
 function detectConflicts(events: ScheduleEvent[]): Set<number> {
@@ -34,72 +34,13 @@ function detectConflicts(events: ScheduleEvent[]): Set<number> {
 }
 
 export function SchedulePanel() {
-  const events: ScheduleEvent[] = [
-    {
-      event_id: 1,
-      date: '2026-05-19',
-      time: '09:00:00',
-      event: 'CS2040S - Data Structures',
-      protected: false,
-      user_id: 1,
-    },
-    {
-      event_id: 2,
-      date: '2026-05-19',
-      time: '11:00:00',
-      event: 'CS2030S - Programming Methodology',
-      protected: false,
-      user_id: 1,
-    },
-    {
-      event_id: 3,
-      date: '2026-05-19',
-      time: '14:00:00',
-      event: 'Project Meeting with Jason',
-      protected: false,
-      user_id: 1,
-    },
-    {
-      event_id: 4,
-      date: '2026-05-19',
-      time: '14:00:00',
-      event: 'Private Tuition Slot',
-      protected: false,
-      user_id: 1,
-    },
-    {
-      event_id: 5,
-      date: '2026-05-19',
-      time: '16:00:00',
-      event: 'MA1521 - Calculus',
-      protected: false,
-      user_id: 1,
-    },
-    {
-      event_id: 6,
-      date: '2026-05-19',
-      time: '20:00:00',
-      event: 'CS2040S Revision',
-      protected: true,
-      user_id: 1,
-    },
-    {
-      event_id: 7,
-      date: '2026-05-19',
-      time: '16:00:00',
-      event: 'Floorball practice',
-      protected: false,
-      user_id: 1,
-    },
-    {
-      event_id: 8,
-      date: '2026-05-19',
-      time: '11:00:00',
-      event: 'IS1108 Consultation',
-      protected: false,
-      user_id: 1,
-    },
-  ];
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+
+  useEffect(() => {
+    fetch("http://localhost:8000/schedule")
+      .then(r => r.json())
+      .then(data => setEvents(data.schedule));
+  }, []);
 
   const conflicts = detectConflicts(events);
 
