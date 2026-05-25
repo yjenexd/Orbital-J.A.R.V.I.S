@@ -1,27 +1,32 @@
-import { Card, CardContent, Typography, Box } from '@mui/material';
-import { AutoAwesome } from '@mui/icons-material';
-import {useState, useEffect} from 'react';
+import { Card, CardContent, Typography, Box, Skeleton } from '@mui/material';
+import { AutoAwesome, EventAvailable } from '@mui/icons-material';
+import { useState, useEffect } from 'react';
 
+interface BriefingResponse {
+  briefing: string;
+  has_events: boolean;
+}
 
 export function DailyBriefing() {
-
   const [briefing, setBriefing] = useState<string | null>(null);
-  const [isLoadingBriefing, setIsLoadingBriefing] = useState(true);
+  const [isLoadingBriefing, setIsLoadingBriefing] = useState<boolean>(true);
+  const [hasEvents, setHasEvents] = useState<boolean>(false);
 
-  //fetch the summary on initialization
+  // Fetch the summary on initialization
   useEffect(() => {
-    const fetchBriefing: () => Promise<void> = async () =>  {
+    const fetchBriefing: () => Promise<void> = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/briefing')
+        const response = await fetch('http://localhost:8000/api/briefing'); //send a get request to the backend to get the briefing
         if (!response.ok) throw new Error('Failed to fetch briefing');
 
-        const data: { briefing: string } = await response.json();
-        setBriefing(data.briefing);
+        const data: BriefingResponse = await response.json();
+          setBriefing(data.briefing);
+          setHasEvents(data.has_events);
       } catch (error) {
-        console.error(error);
-        setBriefing("Unable to load daily briefing. Core systems offline.");
+          console.error(error);
+          setBriefing("Unable to load daily briefing. Core systems offline.");
       } finally {
-        setIsLoadingBriefing(false);
+          setIsLoadingBriefing(false);
       }
     };
 
@@ -37,9 +42,25 @@ export function DailyBriefing() {
             Day at a Glance
           </Typography>
         </Box>
-        <Typography variant="body2">
-          {isLoadingBriefing ? "Initializing cognitive summary..." : briefing}
-        </Typography>
+        
+        {isLoadingBriefing ? (
+          <Box>
+            <Skeleton animation="wave" sx={{ bgcolor: 'rgba(255,255,255,0.4)', mb: 0.5 }} />
+            <Skeleton animation="wave" sx={{ bgcolor: 'rgba(255,255,255,0.4)', width: '80%' }} />
+          </Box>
+        ) : !hasEvents ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, opacity: 0.9 }}>
+            <EventAvailable sx={{ fontSize: 18 }} />
+            <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+              {briefing}
+            </Typography>
+          </Box>
+        ) : (
+          <Typography variant="body2">
+            {briefing}
+          </Typography>
+        )}
+        
       </CardContent>
     </Card>
   );
