@@ -18,10 +18,16 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
-supabase: Client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
-)
+def _get_required_env_var(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+SUPABASE_URL = _get_required_env_var("SUPABASE_URL")
+SUPABASE_KEY = _get_required_env_var("SUPABASE_KEY")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.get("/tasks")
 async def get_tasks():

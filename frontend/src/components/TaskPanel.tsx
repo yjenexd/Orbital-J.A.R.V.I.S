@@ -15,9 +15,30 @@ export function TaskPanel() {
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/tasks")
-      .then(r => r.json())
-      .then(data => setTasks(data.tasks));
+    const loadTasks = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/tasks");
+
+        if (!response.ok) {
+          throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`);
+        }
+
+        const data: unknown = await response.json();
+
+        if (
+          typeof data === 'object' &&
+          data !== null &&
+          'tasks' in data &&
+          Array.isArray(data.tasks)
+        ) {
+          setTasks(data.tasks as Task[]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tasks', error);
+      }
+    };
+
+    void loadTasks();
   }, []);
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {

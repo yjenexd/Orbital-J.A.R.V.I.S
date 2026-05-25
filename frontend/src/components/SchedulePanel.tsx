@@ -37,7 +37,7 @@ export function SchedulePanel() {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/schedule")
+    fetch('http://localhost:8000/schedule')
       .then(r => r.json())
       .then(data => setEvents(data.schedule));
   }, []);
