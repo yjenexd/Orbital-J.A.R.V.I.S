@@ -1,6 +1,6 @@
 import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material';
 import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
-import { useEffect, useState } from "react"
+import { useEffect, useState } from 'react';
 
 
 interface Task {
