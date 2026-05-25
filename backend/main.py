@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from supabase import create_client, Client
 from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
 
 load_dotenv()
@@ -16,6 +17,44 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"], 
 )
+
+def _get_required_env_var(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+SUPABASE_URL = _get_required_env_var("SUPABASE_URL")
+SUPABASE_KEY = _get_required_env_var("SUPABASE_KEY")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+@app.get("/tasks")
+async def get_tasks():
+    try:
+        data = supabase.table("tasks") \
+            .select("title, priority, source, deadline, completed") \
+            .eq("user_id", 1) \
+            .order("deadline", desc=False) \
+            .execute().data
+        return {"tasks": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.get("/schedule")
+async def get_schedule():
+    try:
+        data = supabase.table("schedule") \
+            .select("event_id, date, time, event, protected") \
+            .eq("user_id", 1) \
+            .order("date", desc=False) \
+            .order("time", desc=False) \
+            .execute().data
+        return {"schedule": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 class ChatRequest(BaseModel):
     message: str
