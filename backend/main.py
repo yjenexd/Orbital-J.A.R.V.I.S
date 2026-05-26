@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -20,6 +20,10 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
+#temporary hardcoded user_id and date for testing purposes, will replace with dynamic auth and real-time date later
+user_id = 1
+curr_date = date(2026, 5, 19)
+
 def _get_required_env_var(name: str) -> str:
     value = os.getenv(name)
     if value is None or not value.strip():
@@ -32,11 +36,11 @@ SUPABASE_KEY = _get_required_env_var("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.get("/tasks")
-async def get_tasks():
+def get_tasks():
     try:
         data = supabase.table("tasks") \
             .select("title, priority, source, deadline, completed") \
-            .eq("user_id", 1) \
+            .eq("user_id", user_id) \
             .order("deadline", desc=False) \
             .execute().data
         return {"tasks": data}
@@ -45,11 +49,12 @@ async def get_tasks():
     
 
 @app.get("/schedule")
-async def get_schedule():
+def get_schedule():
     try:
         data = supabase.table("schedule") \
             .select("event_id, date, time, event, protected") \
-            .eq("user_id", 1) \
+            .eq("user_id", user_id) \
+            .eq("date", curr_date) \
             .order("date", desc=False) \
             .order("time", desc=False) \
             .execute().data
