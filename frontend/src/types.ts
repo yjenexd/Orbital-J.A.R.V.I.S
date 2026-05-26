@@ -40,12 +40,14 @@ export interface Email {
  */
 export interface ChatMessage {
   /** Unique identifier for the message */  
-  id: string;
+  message_id: number;
+
+  user_id: number;
   /** The text content of the message */
-  text: string;
+  content: string;
   /** Identifies whether the message is from the human or the AI */
-  sender: 'user' | 'system';
+  role: 'user' | 'system' | 'system';
   /** Unix timestamp of when the message was created */
-  timestamp: number;
+  created_at: string;
 }
 

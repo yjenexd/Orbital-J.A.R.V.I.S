@@ -28,6 +28,28 @@ export function ChatInterface() {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' }); //checks if the ref is attached to a DOM element, and if so, scrolls it into view with a smooth animation
   }, [messages, isTyping]); //watches the messages array, scrolls to bottom whenever a new message is added
 
+  useEffect(() => {
+    const loadChatHistory = async() => {
+      try{
+        const response = await fetch('http://localhost:8000/api/chat/history?user_id=1');
+        if(!response.ok) {
+          throw new Error('Failed to fetch history');
+        }
+
+        const data = await response.json()
+
+        if (data.messages && data.messages.length > 0) {
+          setMessages(data.messages);
+        }
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    };
+
+    loadChatHistory();
+  }, []);
+  
+
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => { //read the input value and update the state
     setInputText(event.target.value);
   }
@@ -39,10 +61,11 @@ export function ChatInterface() {
 
     //1. Add users message to the UI
     const userMessage: ChatMessage = {
-      id: Date.now().toString(), //using timestamp as a simple unique ID for messages
-      sender: 'user',
-      text: trimmedInput,
-      timestamp: Date.now(),
+      message_id: Date.now(), //using timestamp as a simple unique ID for messages
+      user_id: 1, //TODO: refactor this
+      role: 'user',
+      content: trimmedInput,
+      created_at: Date.now().toString(),
     };
 
     setMessages((prev) => [...prev, userMessage]); //append the new message to the existing arrray of Messages
@@ -52,10 +75,13 @@ export function ChatInterface() {
     setIsTyping(true); 
     try {
       //3. Send data to the Python backend
-      const response = await fetch('http://localhost:8000/chat', {  //"Use the HTTP protocol to talk to a service running on my own computer, specifically looking at apartment 8000, and deliver this request to the '/chat' department."
+      const response = await fetch('http://localhost:8000/chat', {  //Documentation: MDN
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }, //label for pacakge, data is in JSON format
-        body: JSON.stringify({ message: trimmedInput }), //turns data into {"message": "the user's text"}
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({
+           user_id: 1, //TODO: change hardcoded data
+           message: trimmedInput 
+          }),
       });
 
       if (!response.ok) {
@@ -67,10 +93,11 @@ export function ChatInterface() {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now().toString(),
-          text: data.reply,
-          sender: 'system',
-          timestamp: Date.now(),
+          message_id: Date.now(),
+          user_id: 1,
+          content: data.reply,
+          role: 'system',
+          created_at: Date.now().toString(),
         }
       ]);
       } catch (error) {
@@ -114,7 +141,7 @@ export function ChatInterface() {
               key={index}
               sx={{
                 display: 'flex',
-                justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
+                justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
               }}
             >
               {/* The actual colored message bubble with a shadow */}
@@ -123,12 +150,12 @@ export function ChatInterface() {
                 sx={{
                   maxWidth: '80%',
                   p: 1.5,
-                  bgcolor: message.sender === 'user' ? 'primary.main' : 'grey.100',
-                  color: message.sender === 'user' ? 'primary.contrastText' : 'text.primary',
+                  bgcolor: message.role === 'user' ? 'primary.main' : 'grey.100',
+                  color: message.role === 'user' ? 'primary.contrastText' : 'text.primary',
                 }}
               >
                 {/* The text inside the bubble */}
-                <Typography variant="body2">{message.text}</Typography>
+                <Typography variant="body2">{message.content}</Typography>
               </Paper>
             </Box>
           ))}
