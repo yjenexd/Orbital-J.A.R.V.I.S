@@ -1,14 +1,13 @@
-import { Container } from '@mui/material'
+import Box from '@mui/material/Box'
 import './App.css'
 import AppLayout from './components/AppLayout'
 
 function App() {
   return (
-    <Container>
+    <Box sx={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AppLayout />
-    </Container>
+    </Box>
   )
-
 }
 
 export default App
