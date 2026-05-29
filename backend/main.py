@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+import json
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -189,9 +190,13 @@ tools = [
                     "task_id": {
                         "type": "integer",
                         "description": "The unique ID of the task to delete."
+                    },
+                    "user_confirmed": {
+                        "type": "boolean",
+                        "description": "CRITICAL: If the user is asking to delete this for the FIRST time, you MUST set this to false. ONLY set to true if you have ALREADY asked them 'Are you sure?' and they replied 'Yes'."
                     }
                 },
-                "required": ["task_id"]
+                "required": ["task_id", "user_confirmed"]
             }
         }
     },
@@ -279,9 +284,13 @@ tools = [
                     "event_id": {
                         "type": "integer",
                         "description": "The unique ID of the event to delete."
+                    },
+                    "user_confirmed": {
+                        "type": "boolean",
+                        "description": "CRITICAL: If the user is asking to delete this for the FIRST time, you MUST set this to false. ONLY set to true if you have ALREADY asked them 'Are you sure?' and they replied 'Yes'."
                     }
                 },
-                "required": ["event_id"]
+                "required": ["event_id", "user_confirmed"]
             }
         }
     }
@@ -310,18 +319,138 @@ async def execute_chat(request: ChatRequest):
             .execute()
 
         sorted_history = history_response.data[::-1]
+
+        ##FETCH LIVE DATABASE context 
+        active_tasks = supabase.table("tasks") \
+            .select("task_id, title, priority, deadline, completed") \
+            .eq("user_id", user_id) \
+            .execute()
+        
+        active_events = supabase.table("schedule") \
+            .select("event_id, date, time, event, protected") \
+            .eq("user_id", user_id) \
+            .execute()
+        
+        db_context = f"""
+        LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
+        Pending Tasks: {active_tasks.data}
+        Calendar Events: {active_events.data}
+        """
+            
         
         #Build the payload with the system prompt + history, send the previous messages limited to 50 for context
-        messages_payload = [{"role" : "system", "content" : system_prompt}] +\
+        messages_payload = [{"role" : "system", "content" : system_prompt + db_context }] +\
             [{"role" : msg["role"], "content" : msg["content"]} for msg in sorted_history]
         
         ##send over the message payload async, wait for response
         response = await client.chat.completions.create(
             model= "gpt-4o-mini",
-            messages = messages_payload
+            messages = messages_payload,
+            tools = tools,
+            tool_choice = "auto"
         )
 
-        ai_reply = response.choices[0].message.content
+        response_message = response.choices[0].message
+        ai_reply = response_message.content
+
+        # Intercept the tool calls
+        if response_message.tool_calls:
+            messages_payload.append(response_message.model_dump(exclude_none=True))
+
+            for tool_call in response_message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+                function_response = json.dumps({"status": "error", "message": "Unknown function."})
+
+                try:
+                    ##TASK TOOL CALLS
+                    if function_name == "add_task":
+                        res = supabase.table("tasks").insert({
+                            "user_id": user_id,
+                            "title": function_args.get("title"),
+                            "priority": function_args.get("priority", "medium")
+                        }).execute()
+                        function_response = json.dumps({"status": "success", "message": "Task added successfully."})
+                    
+                    elif function_name == "update_task":
+                        update_payload = {}
+                        if "completed" in function_args: update_payload["completed"] = function_args["completed"] ##update dictionary with fields to update in database
+                        if "priority" in function_args: update_payload["priority"] = function_args["priority"]
+
+                        res = supabase.table("tasks").update(update_payload)\
+                            .eq("task_id", int(function_args["task_id"])) \
+                            .eq("user_id", user_id).execute()
+                        function_response = json.dumps({"status": "success", "message": "Task updated successfully."})
+
+                    elif function_name == "delete_task":
+                        if not function_args.get("user_confirmed"):
+                            function_response = json.dumps({
+                                "status": "pending_confirmation", 
+                                "message": "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. You MUST reply by asking the user: 'Are you sure you want to delete this task?'"
+                            })
+                        else:
+                            res = supabase.table("tasks").delete()\
+                                .eq("task_id", int(function_args["task_id"]))\
+                                .eq("user_id", user_id).execute()
+
+                            if len(res.data) == 0:
+                                function_response = json.dumps({"status": "error", "message": "Deletion failed. No task found with that exact ID."})
+                            else:
+                                function_response = json.dumps({"status": "success", "message": "Task deleted successfully."})
+                    
+                    ##SCHEDULE TOOL CALLS
+                    elif function_name == "add_schedule_event":
+                        res = supabase.table("schedule").insert({
+                            "user_id": user_id,
+                            "date": function_args.get("date"),
+                            "time": function_args.get("time"),
+                            "event": function_args.get("event_title")
+                        }).execute()
+                        function_response = json.dumps({"status": "success", "message": "Event added successfully."})
+                    
+                    elif function_name == "update_schedule_event":
+                        update_payload = {}
+                        if "date" in function_args: update_payload["date"] = function_args["date"] 
+                        if "time" in function_args: update_payload["time"] = function_args["time"]
+                        if "event_title" in function_args: update_payload["event"] = function_args["event_title"]
+
+                        res = supabase.table("schedule").update(update_payload)\
+                            .eq("event_id", int(function_args["event_id"])) \
+                            .eq("user_id", user_id).execute()
+                        function_response = json.dumps({"status": "success", "message": "Event updated successfully."})
+
+                    elif function_name == "delete_schedule_event":
+                        if not function_args.get("user_confirmed"):
+                            function_response = json.dumps({
+                                "status": "pending_confirmation", 
+                                "message": "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. You MUST reply by asking the user: 'Are you sure you want to cancel this event?'"
+                            })
+                            res = supabase.table("schedule").delete()\
+                                .eq("event_id", int(function_args["event_id"]))\
+                                .eq("user_id", user_id).execute()
+                           
+                            if len(res.data) == 0:
+                                function_response = json.dumps({"status": "error", "message": "Deletion failed. No event found with that exact ID."})
+                            else:
+                                function_response = json.dumps({"status": "success", "message": "Event deleted successfully."})
+
+
+
+                except Exception as db_error:
+                    function_response = json.dumps({"status": "error", "message": f"Database operation failed: {str(db_error)}"})
+                    
+                messages_payload.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": function_response
+                })
+        
+        second_response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages_payload,
+        )
+        ai_reply = second_response.choices[0].message.content
 
         supabase.table("messages").insert({
             "user_id": user_id,
@@ -420,6 +549,9 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
         print(f"Error generating briefing: {str(e)}")
         raise HTTPException(status_code=500, detail="failed to initialize summary")
 
-    
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
