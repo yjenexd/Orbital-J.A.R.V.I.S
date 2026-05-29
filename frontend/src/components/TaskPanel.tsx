@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 
 interface Task {
+  task_id: number;
   title: string;
   priority: 'high' | 'medium' | 'low';
   source: string;
@@ -62,9 +63,9 @@ export function TaskPanel() {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
-          {tasks.map((task, index) => (
+          {tasks.map((task) => (
             <Box
-              key={index}
+              key={task.task_id}
               sx={{
                 p: 1.5,
                 borderRadius: 1,

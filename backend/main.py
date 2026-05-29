@@ -84,12 +84,13 @@ You act as the central intelligence orchestrator. For every user input, classify
 def get_tasks():
     try:
         data = supabase.table("tasks") \
-            .select("title, priority, source, deadline, completed") \
+            .select("task_id, title, priority, source, deadline, completed") \
             .eq("user_id", user_id) \
             .order("deadline", desc=False) \
             .execute().data
         return {"tasks": data}
     except Exception as e:
+        print(f"Tasks Error: {str(e)}") # Add this line!
         raise HTTPException(status_code=500, detail=str(e))
     
 
@@ -99,25 +100,30 @@ def get_schedule():
         data = supabase.table("schedule") \
             .select("event_id, date, time, event, protected") \
             .eq("user_id", user_id) \
-            .eq("date", curr_date) \
+            .eq("date", curr_date.isoformat()) \
             .order("date", desc=False) \
             .order("time", desc=False) \
             .execute().data
         return {"schedule": data}
     except Exception as e:
+        print(f"Schedule Error: {str(e)}") # Add this line!
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/calendar")
-def get_calendar(start: str = Query(default=None)):
+def get_calendar(time_min: str = Query(default=None), time_max: str = Query(default=None)):
     try:
         service = get_google_calendar_service()
-        ref_date = date.fromisoformat(start) if start else curr_date
-        month_start = ref_date.replace(day=1).isoformat() + "T00:00:00+08:00"
-
-        if ref_date.month == 12:
-            month_end = ref_date.replace(year=ref_date.year + 1, month=1, day=1).isoformat() + "T00:00:00+08:00"
+        
+        # If no time_min provided, default to current month start
+        if not time_min:
+            month_start = curr_date.replace(day=1).isoformat() + "T00:00:00+08:00"
+            if curr_date.month == 12:
+                month_end = curr_date.replace(year=curr_date.year + 1, month=1, day=1).isoformat() + "T00:00:00+08:00"
+            else:
+                month_end = curr_date.replace(month=curr_date.month + 1, day=1).isoformat() + "T00:00:00+08:00"
         else:
-            month_end = ref_date.replace(month=ref_date.month + 1, day=1).isoformat() + "T00:00:00+08:00"
+            month_start = time_min
+            month_end = time_max
 
         result = service.events().list(
             calendarId="primary",
@@ -142,6 +148,7 @@ def get_calendar(start: str = Query(default=None)):
 
         return {"schedule": events}
     except Exception as e:
+        print(f"Google Calendar Error: {str(e)}") # This will print the actual error to your terminal!
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/chat/history")
@@ -419,6 +426,7 @@ async def execute_chat(request: ChatRequest):
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 function_response = json.dumps({"status": "error", "message": "Unknown function."})
+                print(f"🤖 [AI TOOL CALL] -> {function_name} | Args: {function_args}")
 
                 try:
                     ##TASK TOOL CALLS
@@ -483,6 +491,7 @@ async def execute_chat(request: ChatRequest):
                                 "status": "pending_confirmation", 
                                 "message": "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. You MUST reply by asking the user: 'Are you sure you want to cancel this event?'"
                             })
+                        else:
                             res = supabase.table("schedule").delete()\
                                 .eq("event_id", int(function_args["event_id"]))\
                                 .eq("user_id", user_id).execute()
@@ -496,6 +505,7 @@ async def execute_chat(request: ChatRequest):
 
                 except Exception as db_error:
                     function_response = json.dumps({"status": "error", "message": f"Database operation failed: {str(db_error)}"})
+                    print(f"❌ [DB ERROR] -> {str(db_error)}")
                     
                 messages_payload.append({
                     "tool_call_id": tool_call.id,
@@ -503,6 +513,12 @@ async def execute_chat(request: ChatRequest):
                     "name": function_name,
                     "content": function_response
                 })
+        
+        # THE HAND-SLAP: Force the LLM to obey the tool response
+        messages_payload.append({
+            "role": "system",
+            "content": "CRITICAL INSTRUCTION: Review the tool responses you just received. If any tool returned 'pending_confirmation', you MUST halt and ask the user 'Are you sure?'. Under NO circumstances should you hallucinate or claim an action was successful if the tool response blocked it."
+        })
         
         second_response = await client.chat.completions.create(
             model="gpt-4o-mini",
