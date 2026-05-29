@@ -39,16 +39,29 @@ export function SchedulePanel() {
 useEffect(() => {
     const fetchSchedule = () => {
       fetch('http://localhost:8000/schedule')
-        .then(r => r.json())
+        .then(r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        })
         .then(data => {
+          // Add safety check before filtering
+          if (!data.schedule || !Array.isArray(data.schedule)) {
+            console.error("Invalid schedule data:", data);
+            setEvents([]);
+            return;
+          }
           const today = '2026-05-19';
           const filtered = data.schedule.filter((e: ScheduleEvent) => e.date === today);
           setEvents(filtered);
+        })
+        .catch(err => {
+          console.error("Failed to fetch schedule:", err);
+          setEvents([]);
         });
     };
 
     fetchSchedule(); 
-    const interval = setInterval(fetchSchedule, 5000); // 5 seconds to refresh
+    const interval = setInterval(fetchSchedule, 5000); 
     return () => clearInterval(interval);
   }, []);
 

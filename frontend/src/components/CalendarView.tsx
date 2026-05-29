@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { Box, Typography } from '@mui/material';
+import type { EventClickArg } from '@fullcalendar/core';
 
 interface ScheduleEvent {
   event_id: string;
@@ -19,9 +20,19 @@ export function CalendarView() {
   const handleDatesSet = (dateInfo: any) => {
     const timeMin = new Date(dateInfo.start).toISOString();
     const timeMax = new Date(dateInfo.end).toISOString();
+    
     fetch(`http://localhost:8000/calendar?time_min=${timeMin}&time_max=${timeMax}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+        return r.json();
+      })
       .then(data => {
+        if (!data.schedule || !Array.isArray(data.schedule)) {
+          console.error("Invalid data format received:", data);
+          setEvents([]); 
+          return;
+        }
+
         const formatted = data.schedule.map((e: ScheduleEvent) => {
           const start = `${e.date}T${e.time}`;
           const endDate = new Date(start);
@@ -36,6 +47,10 @@ export function CalendarView() {
           };
         });
         setEvents(formatted);
+      })
+      .catch(error => {
+        console.error("Failed to fetch calendar events:", error);
+        setEvents([]);
       });
   };
 
@@ -64,7 +79,7 @@ export function CalendarView() {
           minute: '2-digit',
           hour12: true
         }}
-        eventClick={(info) => alert(info.event.title)}
+        eventClick={(info: EventClickArg) => alert(info.event.title)}
       />
     </Box>
   );

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 
 interface Task {
+  task_id: number;
   title: string;
   priority: 'high' | 'medium' | 'low';
   source: string;
@@ -38,7 +39,16 @@ export function TaskPanel() {
       }
     };
 
+    //Fetch immediately on component mount
     void loadTasks();
+
+    // Set up the polling interval (refresh every 5 seconds)
+    const interval = setInterval(() => {
+      void loadTasks();
+    }, 5000);
+
+    // Cleanup the interval when the component unmounts
+    return () => clearInterval(interval);
   }, []);
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {
@@ -62,9 +72,9 @@ export function TaskPanel() {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
-          {tasks.map((task, index) => (
+          {tasks.map((task) => (
             <Box
-              key={index}
+              key={task.task_id}
               sx={{
                 p: 1.5,
                 borderRadius: 1,
