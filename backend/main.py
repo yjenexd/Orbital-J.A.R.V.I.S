@@ -2,12 +2,15 @@ from datetime import date, datetime, timezone
 import json
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
 from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
 from supabase import create_client, Client
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
 
 load_dotenv()
 
@@ -36,6 +39,16 @@ SUPABASE_KEY = _get_required_env_var("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+def get_google_calendar_service():
+    creds = Credentials(
+        token=None,
+        refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+        client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+        token_uri="https://oauth2.googleapis.com/token"
+    )
+    return build("calendar", "v3", credentials=creds)
+  
 #  Configure the client to point to GitHub Models instead of standard OpenAI
 client = AsyncOpenAI(
     base_url="https://models.inference.ai.azure.com",
@@ -81,16 +94,39 @@ def get_tasks():
     
 
 @app.get("/schedule")
-def get_schedule():
+def get_schedule(start: str = Query(default=None)):
     try:
-        data = supabase.table("schedule") \
-            .select("event_id, date, time, event, protected") \
-            .eq("user_id", user_id) \
-            .eq("date", curr_date) \
-            .order("date", desc=False) \
-            .order("time", desc=False) \
-            .execute().data
-        return {"schedule": data}
+        service = get_google_calendar_service()
+        ref_date = date.fromisoformat(start) if start else curr_date
+        month_start = ref_date.replace(day=1).isoformat() + "T00:00:00+08:00"
+
+        if ref_date.month == 12:
+            month_end = ref_date.replace(year=ref_date.year + 1, month=1, day=1).isoformat() + "T00:00:00+08:00"
+        else:
+            month_end = ref_date.replace(month=ref_date.month + 1, day=1).isoformat() + "T00:00:00+08:00"
+
+        result = service.events().list(
+            calendarId="primary",
+            maxResults=100,
+            singleEvents=True,
+            orderBy="startTime",
+            timeMin=month_start,
+            timeMax=month_end
+        ).execute()
+
+        events = []
+        for e in result.get("items", []):
+            start_e = e.get("start", {})
+            extended = e.get("extendedProperties", {}).get("private", {})
+            events.append({
+                "event_id": e["id"],
+                "event": e.get("summary", ""),
+                "date": start_e.get("dateTime", start_e.get("date", ""))[:10],
+                "time": start_e.get("dateTime", "T00:00:00")[11:19],
+                "protected": extended.get("protected", "false") == "true"
+            })
+
+        return {"schedule": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -487,6 +523,26 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
         sample_date = "2026-05-19"
 
         #Fetch Today's schedule
+        service = get_google_calendar_service()
+        today_min = curr_date.isoformat() + "T00:00:00+08:00"
+        today_max = curr_date.isoformat() + "T23:59:59+08:00"
+        gcal_result = service.events().list(
+            calendarId="primary",
+            singleEvents=True,
+            orderBy="startTime",
+            timeMin=today_min,
+            timeMax=today_max
+        ).execute()
+
+        schedule_data = []
+        for e in gcal_result.get("items", []):
+            start = e.get("start", {})
+            extended = e.get("extendedProperties", {}).get("private", {})
+            schedule_data.append({
+                "event": e.get("summary", ""),
+                "time": start.get("dateTime", "T00:00:00")[11:19],
+                "protected": extended.get("protected", "false") == "true"
+            })
         schedule_res = supabase.table("schedule") \
             .select("event_id, date, time, event, protected, users(name)") \
             .eq("date", sample_date) \
@@ -507,7 +563,7 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
             .limit(5) \
             .execute()
        
-        if not schedule_res.data and not tasks_res.data and not email_res.data:
+        if not schedule_data and not tasks_res.data and not email_res.data:
               return {"briefing": "You have no scheduled events, pending tasks, or urgent emails for today. Enjoy your day!",
                       "has_events": False}
    
@@ -516,6 +572,7 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
         You are the user's elite, highly competent, and warm executive assistant. You speak in a natural, human voice—highly organized, proactive, and empathetic. 
         
         DATA STRUCTURE GUIDE:
+        - 'User': Contains 'name' (user's name).
         - `Schedule`: Contains 'event' (description), 'time', and a relational 'users' array (who they are meeting with). 'protected' means it cannot be moved.
         - `Tasks`: Contains 'title', 'deadline', and 'priority'.
         - `Emails`: Contains recent inbox items with pre-generated summaries and 'urgency' levels.
@@ -529,7 +586,7 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
         4. Start directly with the briefing (do not use generic AI greetings like "Good morning" or "Here is your summary").
         
         LIVE DATABASE PAYLOAD:
-        Schedule: {schedule_res.data}
+        Schedule: {schedule_data}        
         Pending Tasks: {tasks_res.data}
         Emails: {email_res.data}
         """
@@ -554,4 +611,23 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
+@app.post("/chat") ##if someone sends a post request to this address, run the function below
+async def chat_execution_engine(request: ChatRequest):
+    try:
+        # Fetch user's name for context
+        user_res = supabase.table("users") \
+            .select("name") \
+            .eq("id", user_id) \
+            .single() \
+            .execute()
+        user_name = user_res.data.get('name') if user_res.data else 'Unknown'
+
+        # NEW: The OpenAI completion format
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini", # Extremely fast and cost-effective for testing
+            messages=[
+                {"role": "system", "content": system_prompt + f"\n\nUSER CONTEXT:\nThe user's name is {user_name}. Today's date is {curr_date.isoformat()}."},
+                {"role": "user", "content": request.message}
+            ]
+        )
 
