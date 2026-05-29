@@ -36,16 +36,21 @@ function detectConflicts(events: ScheduleEvent[]): Set<number> {
 export function SchedulePanel() {
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
-  useEffect(() => {
+useEffect(() => {
+    const fetchSchedule = () => {
       fetch('http://localhost:8000/schedule')
         .then(r => r.json())
         .then(data => {
-          //HARD CODED DATE FOR TESTING, TO BE REPLACED DYNAMICALLY IN FINAL PRODUCT
           const today = '2026-05-19';
           const filtered = data.schedule.filter((e: ScheduleEvent) => e.date === today);
           setEvents(filtered);
         });
-    }, []);
+    };
+
+    fetchSchedule(); 
+    const interval = setInterval(fetchSchedule, 5000); // 5 seconds to refresh
+    return () => clearInterval(interval);
+  }, []);
 
   const conflicts = detectConflicts(events);
 

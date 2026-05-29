@@ -19,7 +19,7 @@ export function CalendarView() {
   const handleDatesSet = (dateInfo: any) => {
     const timeMin = new Date(dateInfo.start).toISOString();
     const timeMax = new Date(dateInfo.end).toISOString();
-    fetch(`http://localhost:8000/schedule?time_min=${timeMin}&time_max=${timeMax}`)
+    fetch(`http://localhost:8000/calendar?time_min=${timeMin}&time_max=${timeMax}`)
       .then(r => r.json())
       .then(data => {
         const formatted = data.schedule.map((e: ScheduleEvent) => {
