@@ -65,10 +65,6 @@ export default function AppLayout() {
             <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, minHeight: 160 }}>
               <SchedulePanel />
             </Box>
-
-            <Box sx={{ gridColumn: '1 / -1', bgcolor: 'background.paper', p: 2, borderRadius: 1 }}>
-              <h3>Wide Row</h3>
-            </Box>
           </Box>
         </Box>
 
