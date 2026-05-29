@@ -39,7 +39,16 @@ export function TaskPanel() {
       }
     };
 
+    //Fetch immediately on component mount
     void loadTasks();
+
+    // Set up the polling interval (refresh every 5 seconds)
+    const interval = setInterval(() => {
+      void loadTasks();
+    }, 5000);
+
+    // Cleanup the interval when the component unmounts
+    return () => clearInterval(interval);
   }, []);
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {

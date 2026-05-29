@@ -191,6 +191,10 @@ tools = [
                         "type": "string",
                         "enum": ["low", "medium", "high"],
                         "description": "The urgency of the task. Default to 'medium' if not specified."
+                    },
+                    "deadline": {
+                        "type": "string",
+                        "description": "The deadline for the task in YYYY-MM-DD format. Pass 'none' if the user explicitly states there is no deadline."
                     }
                 },
                 "required": ["title"]
@@ -222,6 +226,10 @@ tools = [
                         "type": "string",
                         "enum": ["low", "medium", "high"],
                         "description": "The updated urgency of the task."
+                    },
+                    "deadline": {
+                        "type": "string",
+                        "description": "The updated deadline for the task in YYYY-MM-DD format. Optional, but if provided, it should be a valid date string."
                     }
                 },
                 "required": ["task_id"]
@@ -426,22 +434,38 @@ async def execute_chat(request: ChatRequest):
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 function_response = json.dumps({"status": "error", "message": "Unknown function."})
-                print(f"🤖 [AI TOOL CALL] -> {function_name} | Args: {function_args}")
+                print(f" [AI TOOL CALL] -> {function_name} | Args: {function_args}")
 
                 try:
                     ##TASK TOOL CALLS
+                    ##TASK TOOL CALLS
                     if function_name == "add_task":
-                        res = supabase.table("tasks").insert({
-                            "user_id": user_id,
-                            "title": function_args.get("title"),
-                            "priority": function_args.get("priority", "medium")
-                        }).execute()
-                        function_response = json.dumps({"status": "success", "message": "Task added successfully."})
+                        deadline_val = function_args.get("deadline")
+                        
+                        if not deadline_val:
+                            function_response = json.dumps({
+                                "status": "pending_information", 
+                                "message": "SYSTEM OVERRIDE: Task creation blocked. DO NOT tell the user it was added. You MUST reply by asking: 'When is the deadline for this task?'"
+                            })
+                        else:
+                            insert_payload = {
+                                "user_id": user_id,
+                                "title": function_args.get("title"),
+                                "priority": function_args.get("priority", "medium")
+                            }
+                            
+                            # Only add the deadline to the DB payload if it isn't "none"
+                            if deadline_val.lower() != "none":
+                                insert_payload["deadline"] = deadline_val
+
+                            res = supabase.table("tasks").insert(insert_payload).execute()
+                            function_response = json.dumps({"status": "success", "message": "Task added successfully."})
                     
                     elif function_name == "update_task":
                         update_payload = {}
-                        if "completed" in function_args: update_payload["completed"] = function_args["completed"] ##update dictionary with fields to update in database
+                        if "completed" in function_args: update_payload["completed"] = function_args["completed"]
                         if "priority" in function_args: update_payload["priority"] = function_args["priority"]
+                        if "deadline" in function_args: update_payload["deadline"] = function_args["deadline"]
 
                         res = supabase.table("tasks").update(update_payload)\
                             .eq("task_id", int(function_args["task_id"])) \
@@ -516,10 +540,10 @@ async def execute_chat(request: ChatRequest):
         
         # THE HAND-SLAP: Force the LLM to obey the tool response
         messages_payload.append({
-            "role": "system",
-            "content": "CRITICAL INSTRUCTION: Review the tool responses you just received. If any tool returned 'pending_confirmation', you MUST halt and ask the user 'Are you sure?'. Under NO circumstances should you hallucinate or claim an action was successful if the tool response blocked it."
+            "role": "user",
+            "content": "CRITICAL INSTRUCTION: Review the tool responses you just received. If any tool returned 'pending_confirmation' or 'pending_information', you MUST halt and ask the user for the missing input. Under NO circumstances should you hallucinate or claim an action was successful if the tool response blocked it."
         })
-        
+
         second_response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages_payload,
