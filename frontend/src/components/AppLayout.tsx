@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Box, CssBaseline, GlobalStyles, Tabs, Tab } from '@mui/material';
 import { ChatInterface } from './ChatInterface';
 import { DailyBriefing } from './DailyBriefing';

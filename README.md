@@ -47,8 +47,8 @@ Open a second terminal instance.
 2. Install dependencies:
    npm install
 
-3. Start the development server:
-   npm run dev
+3. Start the web app:
+   vercel --prod
 
 ---
 
