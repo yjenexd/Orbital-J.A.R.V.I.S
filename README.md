@@ -23,14 +23,15 @@ Local development setup guide for the J.a.r.v.i.s React/FastAPI stack. This syst
    python -m venv venv
    venv\Scripts\activate
 
-3. Install dependencies (FastAPI, Uvicorn, and OpenAI SDK):
-   pip install fastapi uvicorn pydantic python-dotenv openai supabase
+3. Install dependencies:
+   pip install -r requirements.txt
 
 4. Configure AI inference token:
    - Go to GitHub Settings > Developer settings > Personal access tokens > Tokens (classic).
    - Generate a new token (no scopes required).
    - Create a `.env` file in the root of the `backend` folder and add:
      GITHUB_TOKEN=ghp_your_token_here
+     in addition to other secret keys(Supabase information, Google information)
 
 5. Start the backend server:
    python main.py
