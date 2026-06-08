@@ -1,6 +1,8 @@
 import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material';
 import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
+import { API_URL } from "../api";
+
 
 
 interface Task {
@@ -18,7 +20,7 @@ export function TaskPanel() {
   useEffect(() => {
     const loadTasks = async () => {
       try {
-        const response = await fetch("http://localhost:8000/tasks");
+        const response = await fetch(`${API_URL}/tasks`);
 
         if (!response.ok) {
           throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`);

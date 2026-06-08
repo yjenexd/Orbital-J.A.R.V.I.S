@@ -1,6 +1,8 @@
 import { Card, CardContent, Typography, Box, Skeleton } from '@mui/material';
 import { AutoAwesome, EventAvailable } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
+import { API_URL } from "../api";
+
 
 interface BriefingResponse {
   briefing: string;
@@ -16,7 +18,7 @@ export function DailyBriefing() {
   useEffect(() => {
     const fetchBriefing: () => Promise<void> = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/briefing'); //send a get request to the backend to get the briefing
+        const response = await fetch(`${API_URL}/api/briefing`); //send a get request to the backend to get the briefing
         if (!response.ok) throw new Error('Failed to fetch briefing');
 
         const data: BriefingResponse = await response.json();

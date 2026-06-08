@@ -5,6 +5,8 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { Box, Typography } from '@mui/material';
 import type { EventClickArg } from '@fullcalendar/core';
+import { API_URL } from "../api";
+
 
 interface ScheduleEvent {
   event_id: string;
@@ -21,7 +23,7 @@ export function CalendarView() {
     const timeMin = new Date(dateInfo.start).toISOString();
     const timeMax = new Date(dateInfo.end).toISOString();
     
-    fetch(`http://localhost:8000/calendar?time_min=${timeMin}&time_max=${timeMax}`)
+    fetch(`${API_URL}/calendar?time_min=${timeMin}&time_max=${timeMax}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
         return r.json();

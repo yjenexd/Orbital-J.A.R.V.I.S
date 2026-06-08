@@ -1,6 +1,8 @@
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
 import { CalendarMonth, Warning, Shield } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
+import { API_URL } from "../api";
+
 
 interface ScheduleEvent {
   event_id: number;
@@ -38,7 +40,7 @@ export function SchedulePanel() {
 
 useEffect(() => {
     const fetchSchedule = () => {
-      fetch('http://localhost:8000/schedule')
+      fetch(`${API_URL}/schedule`)
         .then(r => {
           if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
           return r.json();

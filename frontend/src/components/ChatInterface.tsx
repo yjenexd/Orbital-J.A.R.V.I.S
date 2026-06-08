@@ -2,7 +2,7 @@ import { Card, CardContent, Typography, Box, TextField, IconButton, Paper } from
 import { Chat, Send } from '@mui/icons-material';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatMessage } from '../types';
-
+import { API_URL } from "../api";
 /**
  * A fixed-size conversational UI panel that renders a scrollable message chain.
  * Currently operates with localized state to track user inputs and mock AI replies.
@@ -31,7 +31,7 @@ export function ChatInterface() {
   useEffect(() => {
     const loadChatHistory = async() => {
       try{
-        const response = await fetch('http://localhost:8000/api/chat/history?user_id=1');
+        const response = await fetch(`${API_URL}/api/chat/history?user_id=1`);
         if(!response.ok) {
           throw new Error('Failed to fetch history');
         }
@@ -75,7 +75,7 @@ export function ChatInterface() {
     setIsTyping(true); 
     try {
       //3. Send data to the Python backend
-      const response = await fetch('http://localhost:8000/chat', {  //Documentation: MDN
+      const response = await fetch(`${API_URL}/chat`, {  //Documentation: MDN
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({
