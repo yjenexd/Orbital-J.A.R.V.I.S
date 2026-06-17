@@ -2,6 +2,7 @@ import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/materia
 import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { API_URL } from "../api";
+import { useAuth } from '../contexts/AuthContext';
 
 
 
@@ -15,12 +16,16 @@ interface Task {
 }
 
 export function TaskPanel() {
+  const { session } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
+    if (!session) return;
     const loadTasks = async () => {
       try {
-        const response = await fetch(`${API_URL}/tasks`);
+        const response = await fetch(`${API_URL}/tasks`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`);
@@ -51,7 +56,7 @@ export function TaskPanel() {
 
     // Cleanup the interval when the component unmounts
     return () => clearInterval(interval);
-  }, []);
+  }, [session]);
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {
     switch (priority) {

@@ -2,6 +2,7 @@ import { Card, CardContent, Typography, Box, Skeleton } from '@mui/material';
 import { AutoAwesome, EventAvailable } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { API_URL } from "../api";
+import { useAuth } from '../contexts/AuthContext';
 
 
 interface BriefingResponse {
@@ -10,15 +11,19 @@ interface BriefingResponse {
 }
 
 export function DailyBriefing() {
+  const { session } = useAuth();
   const [briefing, setBriefing] = useState<string | null>(null);
   const [isLoadingBriefing, setIsLoadingBriefing] = useState<boolean>(true);
   const [hasEvents, setHasEvents] = useState<boolean>(false);
 
   // Fetch the summary on initialization
   useEffect(() => {
+    if (!session) return;
     const fetchBriefing: () => Promise<void> = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/briefing`); //send a get request to the backend to get the briefing
+        const response = await fetch(`${API_URL}/api/briefing`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        }); //send a get request to the backend to get the briefing
         if (!response.ok) throw new Error('Failed to fetch briefing');
 
         const data: BriefingResponse = await response.json();
@@ -33,7 +38,7 @@ export function DailyBriefing() {
     };
 
     fetchBriefing();
-  }, []);
+  }, [session]);
 
   return (
     <Card sx={{ mb: 2, bgcolor: 'primary.light', color: 'primary.contrastText', borderRadius: 2 }}>

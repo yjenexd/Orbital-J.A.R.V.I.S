@@ -1,8 +1,8 @@
-from datetime import date, datetime, timezone
+from datetime import date
 import json
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -24,9 +24,7 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
-#temporary hardcoded user_id and date for testing purposes, will replace with dynamic auth and real-time date later
-user_id = 1
-curr_date = date(2026, 5, 19)
+curr_date = date.today()
 
 def _get_required_env_var(name: str) -> str:
     value = os.getenv(name)
@@ -38,6 +36,14 @@ SUPABASE_URL = _get_required_env_var("SUPABASE_URL")
 SUPABASE_KEY = _get_required_env_var("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+async def get_current_user(authorization: str = Header(...)) -> str:
+    try:
+        token = authorization.removeprefix("Bearer ")
+        result = supabase.auth.get_user(token)
+        return result.user.id
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 def get_google_calendar_service():
     creds = Credentials(
@@ -55,7 +61,6 @@ client = AsyncOpenAI(
     api_key=os.getenv("GITHUB_TOKEN"),
 )
 class ChatRequest(BaseModel):
-    user_id: int
     message: str
     history_limit: int = 10
 
@@ -81,7 +86,7 @@ You act as the central intelligence orchestrator. For every user input, classify
 
 
 @app.get("/tasks")
-def get_tasks():
+def get_tasks(user_id: str = Depends(get_current_user)):
     try:
         data = supabase.table("tasks") \
             .select("task_id, title, priority, source, deadline, completed") \
@@ -90,12 +95,12 @@ def get_tasks():
             .execute().data
         return {"tasks": data}
     except Exception as e:
-        print(f"Tasks Error: {str(e)}") # Add this line!
+        print(f"Tasks Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     
 
 @app.get("/schedule")
-def get_schedule():
+def get_schedule(user_id: str = Depends(get_current_user)):
     try:
         data = supabase.table("schedule") \
             .select("event_id, date, time, event, protected") \
@@ -106,11 +111,11 @@ def get_schedule():
             .execute().data
         return {"schedule": data}
     except Exception as e:
-        print(f"Schedule Error: {str(e)}") # Add this line!
+        print(f"Schedule Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/calendar")
-def get_calendar(time_min: str = Query(default=None), time_max: str = Query(default=None)):
+def get_calendar(time_min: str = Query(default=None), time_max: str = Query(default=None), _: str = Depends(get_current_user)):
     try:
         service = get_google_calendar_service()
         
@@ -152,7 +157,7 @@ def get_calendar(time_min: str = Query(default=None), time_max: str = Query(defa
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/chat/history")
-async def get_chat_history(user_id: int, limit: int = 5):
+async def get_chat_history(limit: int = 5, user_id: str = Depends(get_current_user)):
     try:
         response = supabase.table("messages") \
             .select("message_id, role, content, created_at") \
@@ -361,9 +366,8 @@ tools = [
     }
 ]
 
-@app.post("/chat") #only messages table queried for now
-async def execute_chat(request: ChatRequest):
-    user_id = request.user_id
+@app.post("/chat")
+async def execute_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     user_message = request.message
 
     try:
@@ -396,11 +400,11 @@ async def execute_chat(request: ChatRequest):
             .eq("user_id", user_id) \
             .execute()
         
-        user_name = supabase.table("users") \
+        user_name_res = supabase.table("users") \
                     .select("name") \
                     .eq("id", user_id) \
-                    .single() \
-                    .execute().data.get("name", "Unknown")
+                    .execute()
+        user_name = user_name_res.data[0].get("name", "Unknown") if user_name_res.data else "Unknown"
         
         db_context = f"""
         LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
@@ -572,36 +576,29 @@ async def execute_chat(request: ChatRequest):
 
 
 #New route: day at a glance briefing
-@app.get("/api/briefing") ##if anyone sends a GET request to this address, run the function below
-async def day_at_a_glance_briefing(): ##does not pause the entire backend, function becomes "coroutine", can be paused and resumed
+@app.get("/api/briefing")
+async def day_at_a_glance_briefing(user_id: str = Depends(get_current_user)):
     try:
-       
-       # TODO: Replace hardcoded user_id with dynamic auth context later
-        current_user_id = 1 
-        
-        # Get today's date formatted as YYYY-MM-DD to match your 'date' column type
-        #today_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        # TODO: # Hardcoded sample date for testing (May 19, 2026)
-        sample_date = "2026-05-19"
+        today_date = curr_date.isoformat()
 
         #Fetch Today's schedule
         schedule_res = supabase.table("schedule") \
-            .select("event_id, date, time, event, protected, users(name)") \
-            .eq("date", sample_date) \
-            .eq("user_id", current_user_id) \
+            .select("event_id, date, time, event, protected") \
+            .eq("date", today_date) \
+            .eq("user_id", user_id) \
             .execute()
 
         # 2. Fetch Pending Tasks
         tasks_res = supabase.table("tasks") \
             .select("task_id, title, priority, deadline, source") \
             .eq("completed", False) \
-            .eq("user_id", current_user_id) \
+            .eq("user_id", user_id) \
             .execute()
-            
-        # 3. Fetch Emails 
+
+        # 3. Fetch Emails
         email_res = supabase.table("email") \
             .select("email_id, sender, subject, summary, urgency") \
-            .eq("user_id", current_user_id) \
+            .eq("user_id", user_id) \
             .limit(5) \
             .execute()
        

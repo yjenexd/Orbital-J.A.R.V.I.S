@@ -3,6 +3,7 @@ import { Chat, Send } from '@mui/icons-material';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatMessage } from '../types';
 import { API_URL } from "../api";
+import { useAuth } from '../contexts/AuthContext';
 /**
  * A fixed-size conversational UI panel that renders a scrollable message chain.
  * Currently operates with localized state to track user inputs and mock AI replies.
@@ -18,6 +19,7 @@ import { API_URL } from "../api";
  */
 
 export function ChatInterface() {
+  const { session } = useAuth();
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]); //local state to hold the conversation history, initialized as an empty array
   const [isTyping, setIsTyping] = useState(false); //state to track if the AI is currently "typing" a response, used to disable input and show loading indicators if needed
@@ -29,9 +31,12 @@ export function ChatInterface() {
   }, [messages, isTyping]); //watches the messages array, scrolls to bottom whenever a new message is added
 
   useEffect(() => {
+    if (!session) return;
     const loadChatHistory = async() => {
       try{
-        const response = await fetch(`${API_URL}/api/chat/history?user_id=1`);
+        const response = await fetch(`${API_URL}/api/chat/history`, {
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        });
         if(!response.ok) {
           throw new Error('Failed to fetch history');
         }
@@ -47,7 +52,7 @@ export function ChatInterface() {
     };
 
     loadChatHistory();
-  }, []);
+  }, [session]);
   
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => { //read the input value and update the state
@@ -62,7 +67,7 @@ export function ChatInterface() {
     //1. Add users message to the UI
     const userMessage: ChatMessage = {
       message_id: Date.now(), //using timestamp as a simple unique ID for messages
-      user_id: 1, //TODO: refactor this
+      user_id: session?.user.id ?? '',
       role: 'user',
       content: trimmedInput,
       created_at: Date.now().toString(),
@@ -77,11 +82,11 @@ export function ChatInterface() {
       //3. Send data to the Python backend
       const response = await fetch(`${API_URL}/chat`, {  //Documentation: MDN
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({
-           user_id: 1, //TODO: change hardcoded data
-           message: trimmedInput 
-          }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ message: trimmedInput }),
       });
 
       if (!response.ok) {
@@ -94,7 +99,7 @@ export function ChatInterface() {
         ...prev,
         {
           message_id: Date.now(),
-          user_id: 1,
+          user_id: session?.user.id ?? '',
           content: data.reply,
           role: 'system',
           created_at: Date.now().toString(),

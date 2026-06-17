@@ -39,10 +39,10 @@ export interface Email {
  * Represents a single message bubble in the chat interface.
  */
 export interface ChatMessage {
-  /** Unique identifier for the message */  
+  /** Unique identifier for the message */
   message_id: number;
 
-  user_id: number;
+  user_id: string;
   /** The text content of the message */
   content: string;
   /** Identifies whether the message is from the human or the AI */
