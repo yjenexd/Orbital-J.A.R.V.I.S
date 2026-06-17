@@ -18,6 +18,8 @@ Local development setup guide for the J.a.r.v.i.s React/FastAPI stack. This syst
 
 2. Create and activate a virtual environment:
    # Mac/Linux:
+   Note: If you are on Ubuntu/WSL and get a "venv not found" error, run sudo apt install python3-venv first.
+
    python3 -m venv venv
    source venv/bin/activate
    
@@ -25,8 +27,27 @@ Local development setup guide for the J.a.r.v.i.s React/FastAPI stack. This syst
    python -m venv venv
    venv\Scripts\activate
 
+> [!WARNING]
+> **Important: Virtual Environment Location**
+> To avoid dependency conflicts and editor confusion, all Python packages must be kept strictly within the `backend/` directory. 
+> 
+> * **Do not** let VS Code automatically create a `.venv` folder in the root project directory.
+> * Always ensure you have navigated into the backend (`cd backend`) before running your `venv` activation command.
+> If you accidentally create a `.venv` in the root folder, delete it immediately before proceeding to install any dependencies.
+
 3. Install dependencies:
    pip install -r requirements.txt
+
+> [!TIP]
+> **VS Code Users: Select the Correct Interpreter**
+> To prevent VS Code from showing "missing import" errors, you need to point it to the virtual environment you just created.
+> 
+> 1. Open any Python file in the repository (e.g., `backend/main.py`).
+> 2. Press `Ctrl + Shift + P` (Windows/Linux) or `Cmd + Shift + P` (Mac) to open the Command Palette.
+> 3. Type and select **`Python: Select Interpreter`**.
+> 4. Choose the interpreter that points to your backend environment:
+>    - **Mac/Linux:** Look for `./backend/venv/bin/python`
+>    - **Windows:** Look for `.\backend\venv\Scripts\python.exe`
 
 4. Configure environment variables:
    - Create a `.env` file in the root of the `backend` folder with the following keys.
