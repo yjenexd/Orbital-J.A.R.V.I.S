@@ -1,7 +1,7 @@
 import { Card, CardContent, Typography, Box, Skeleton } from '@mui/material';
 import { AutoAwesome, EventAvailable } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
-import { API_URL } from "../api";
+import { fetchWithGroqKey } from "../api";
 
 
 interface BriefingResponse {
@@ -18,15 +18,15 @@ export function DailyBriefing() {
   useEffect(() => {
     const fetchBriefing: () => Promise<void> = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/briefing`); //send a get request to the backend to get the briefing
-        if (!response.ok) throw new Error('Failed to fetch briefing');
-
-        const data: BriefingResponse = await response.json();
+        const data = await fetchWithGroqKey<BriefingResponse>('/api/briefing');
           setBriefing(data.briefing);
           setHasEvents(data.has_events);
-      } catch (error) {
+      } catch (error: string | any) {
           console.error(error);
-          setBriefing("Unable to load daily briefing. Core systems offline.");
+          const errorMessage = error.message === 'API_KEY_MISSING' 
+            ? "⚠️ System offline: Please save your Groq API key in the Profile tab first."
+            : "⚠️ System error: Failed to connect to intelligence backend.";
+          setBriefing(errorMessage);
       } finally {
           setIsLoadingBriefing(false);
       }

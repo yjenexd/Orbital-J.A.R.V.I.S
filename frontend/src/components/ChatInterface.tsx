@@ -2,7 +2,7 @@ import { Card, CardContent, Typography, Box, TextField, IconButton, Paper } from
 import { Chat, Send } from '@mui/icons-material';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatMessage } from '../types';
-import { API_URL } from "../api";
+import { API_URL, fetchWithGroqKey } from "../api";
 /**
  * A fixed-size conversational UI panel that renders a scrollable message chain.
  * Currently operates with localized state to track user inputs and mock AI replies.
@@ -31,7 +31,7 @@ export function ChatInterface() {
   useEffect(() => {
     const loadChatHistory = async() => {
       try{
-        const response = await fetch(`${API_URL}/api/chat/history?user_id=1`);
+        const response = await fetch(`${API_URL}/api/chat/history?user_id=81d287be-3534-4d86-88db-d6c2cf9db5c6`); //${} is  syntax for template literals
         if(!response.ok) {
           throw new Error('Failed to fetch history');
         }
@@ -62,7 +62,7 @@ export function ChatInterface() {
     //1. Add users message to the UI
     const userMessage: ChatMessage = {
       message_id: Date.now(), //using timestamp as a simple unique ID for messages
-      user_id: 1, //TODO: refactor this
+      user_id: '81d287be-3534-4d86-88db-d6c2cf9db5c6',
       role: 'user',
       content: trimmedInput,
       created_at: Date.now().toString(),
@@ -75,33 +75,44 @@ export function ChatInterface() {
     setIsTyping(true); 
     try {
       //3. Send data to the Python backend
-      const response = await fetch(`${API_URL}/chat`, {  //Documentation: MDN
+      //3. Send data to the Python backend
+      const data = await fetchWithGroqKey<{ reply: string }>('/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({
-           user_id: 1, //TODO: change hardcoded data
+           user_id: '81d287be-3534-4d86-88db-d6c2cf9db5c6',
            message: trimmedInput 
           }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.statusText}`);
-      }
-      const data = await response.json();
 
       //4. Append AI response to UI
       setMessages((prev) => [
         ...prev,
         {
           message_id: Date.now(),
-          user_id: 1,
+          user_id: '81d287be-3534-4d86-88db-d6c2cf9db5c6',
           content: data.reply,
           role: 'system',
           created_at: Date.now().toString(),
         }
       ]);
-      } catch (error) {
+      } catch (error: string | any) {
         console.error("Error communicating with the backend:", error);
+
+        const errorMessage = error.message === 'API_KEY_MISSING' 
+          ? "⚠️ System offline: Please save your Groq API key in the Profile tab first."
+          : "⚠️ System error: Failed to connect to intelligence backend.";
+        
+        setMessages((prev) => [
+          ...prev,
+          {
+            message_id: Date.now(),
+            user_id: '81d287be-3534-4d86-88db-d6c2cf9db5c6',
+            content: errorMessage,
+            role: 'system',
+            created_at: Date.now().toString(),
+          }
+        ]);
+
       } finally {
         setIsTyping(false);
       }
@@ -123,7 +134,7 @@ export function ChatInterface() {
           </Typography>
         </Box>
         
-        {/* THIS IS THE SCROLLABLE CHA HISTORY */}
+        {/* THIS IS THE SCROLLABLE CHAT HISTORY */}
         <Box
           sx={{
             flex: 1,
