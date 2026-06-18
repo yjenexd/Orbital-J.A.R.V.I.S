@@ -25,8 +25,8 @@ app.add_middleware(
 )
 
 #temporary hardcoded user_id and date for testing purposes, will replace with dynamic auth and real-time date later
-user_id = 1
-curr_date = date(2026, 5, 19)
+user_id: str = "81d287be-3534-4d86-88db-d6c2cf9db5c6"
+curr_date: date = date(2026, 5, 19)
 
 def _get_required_env_var(name: str) -> str:
     value = os.getenv(name)
@@ -55,7 +55,7 @@ client = AsyncOpenAI(
     api_key=os.getenv("GITHUB_TOKEN"),
 )
 class ChatRequest(BaseModel):
-    user_id: int
+    user_id: str
     message: str
     history_limit: int = 10
 
@@ -152,7 +152,7 @@ def get_calendar(time_min: str = Query(default=None), time_max: str = Query(defa
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/chat/history")
-async def get_chat_history(user_id: int, limit: int = 5):
+async def get_chat_history(user_id: str, limit: int = 5):
     try:
         response = supabase.table("messages") \
             .select("message_id, role, content, created_at") \
@@ -577,7 +577,7 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
     try:
        
        # TODO: Replace hardcoded user_id with dynamic auth context later
-        current_user_id = 1 
+        current_user_id = user_id
         
         # Get today's date formatted as YYYY-MM-DD to match your 'date' column type
         #today_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
