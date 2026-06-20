@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 import json
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -10,6 +10,7 @@ from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
 from supabase import create_client, Client
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+
 
 
 load_dotenv()
@@ -25,8 +26,8 @@ app.add_middleware(
 )
 
 #temporary hardcoded user_id and date for testing purposes, will replace with dynamic auth and real-time date later
-user_id = 1
-curr_date = date(2026, 5, 19)
+user_id: str = "81d287be-3534-4d86-88db-d6c2cf9db5c6"
+curr_date: date = date(2026, 5, 19)
 
 def _get_required_env_var(name: str) -> str:
     value = os.getenv(name)
@@ -49,13 +50,23 @@ def get_google_calendar_service():
     )
     return build("calendar", "v3", credentials=creds)
 
-#  Configure the client to point to GitHub Models instead of standard OpenAI
-client = AsyncOpenAI(
-    base_url="https://models.inference.ai.azure.com",
-    api_key=os.getenv("GITHUB_TOKEN"),
-)
+async def get_groq_client(x_groq_api_key: str = Header(None)): # create an instance of the OpenAI client that can be used in any route, and automatically closes after use
+    if not x_groq_api_key:
+        raise HTTPException(status_code=401, detail="API_KEY_MISSING")
+
+    client = AsyncOpenAI( 
+        base_url="https://api.groq.com/openai/v1",
+        api_key=x_groq_api_key
+    )
+
+    try:
+        yield client
+    finally:
+        await client.close()
+
+
 class ChatRequest(BaseModel):
-    user_id: int
+    user_id: str
     message: str
     history_limit: int = 10
 
@@ -152,7 +163,7 @@ def get_calendar(time_min: str = Query(default=None), time_max: str = Query(defa
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/chat/history")
-async def get_chat_history(user_id: int, limit: int = 5):
+async def get_chat_history(user_id: str, limit: int = 5):
     try:
         response = supabase.table("messages") \
             .select("message_id, role, content, created_at") \
@@ -362,7 +373,7 @@ tools = [
 ]
 
 @app.post("/chat") #only messages table queried for now
-async def execute_chat(request: ChatRequest):
+async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_groq_client)):
     user_id = request.user_id
     user_message = request.message
 
@@ -417,7 +428,7 @@ async def execute_chat(request: ChatRequest):
         
         ##send over the message payload async, wait for response
         response = await client.chat.completions.create(
-            model= "gpt-4o-mini",
+            model= "openai/gpt-oss-120b",
             messages = messages_payload,
             tools = tools,
             tool_choice = "auto"
@@ -545,7 +556,7 @@ async def execute_chat(request: ChatRequest):
         })
 
         second_response = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="openai/gpt-oss-120b",
             messages=messages_payload,
         )
         ai_reply = second_response.choices[0].message.content
@@ -573,11 +584,11 @@ async def execute_chat(request: ChatRequest):
 
 #New route: day at a glance briefing
 @app.get("/api/briefing") ##if anyone sends a GET request to this address, run the function below
-async def day_at_a_glance_briefing(): ##does not pause the entire backend, function becomes "coroutine", can be paused and resumed
+async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client)): ##does not pause the entire backend, function becomes "coroutine", can be paused and resumed
     try:
        
        # TODO: Replace hardcoded user_id with dynamic auth context later
-        current_user_id = 1 
+        current_user_id = user_id
         
         # Get today's date formatted as YYYY-MM-DD to match your 'date' column type
         #today_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -633,7 +644,7 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
         """
 
         ai_response = await client.chat.completions.create(
-            model= "gpt-4o-mini",
+            model= "llama3-8b-8192",
             messages=[
                 {"role": "system", "content": "You are a proactive AI secretary."},
                 {"role": "user", "content": briefing_prompt}
@@ -645,6 +656,10 @@ async def day_at_a_glance_briefing(): ##does not pause the entire backend, funct
 
     except Exception as e:
         print(f"Error generating briefing: {str(e)}")
+
+        if isinstance(e, HTTPException): 
+            raise e
+        
         raise HTTPException(status_code=500, detail="failed to initialize summary")
 
 

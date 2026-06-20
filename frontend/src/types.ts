@@ -9,7 +9,7 @@ export interface CalendarEvent {
     time: string;
     event: string;
     protected: boolean;
-    user_id: number;
+    user_id: string;
 }
 
 export type UserSchedule = CalendarEvent[];
@@ -20,7 +20,7 @@ export interface Task {
     origin: string;
     deadline: string;
     status:boolean;
-    user_id: number;
+    user_id: string;
     priority: number;
     email_id?: number | null;
 }
@@ -30,7 +30,7 @@ export interface Email {
     date: string;     // timestamp
     sender: string;
     summary: string;
-    user_id: number;  // int8 (Foreign Key)
+    user_id: string;  // int8 (Foreign Key)
     subject: string;
     urgency: 'low' | 'medium' | 'high'; // Custom email_urgency type
 }
@@ -42,7 +42,7 @@ export interface ChatMessage {
   /** Unique identifier for the message */  
   message_id: number;
 
-  user_id: number;
+  user_id: string;
   /** The text content of the message */
   content: string;
   /** Identifies whether the message is from the human or the AI */
