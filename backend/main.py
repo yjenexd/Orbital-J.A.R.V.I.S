@@ -428,7 +428,7 @@ async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_g
         
         ##send over the message payload async, wait for response
         response = await client.chat.completions.create(
-            model= "llama-3.1-70b-versatile",
+            model= "openai/gpt-oss-120b",
             messages = messages_payload,
             tools = tools,
             tool_choice = "auto"
@@ -556,7 +556,7 @@ async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_g
         })
 
         second_response = await client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=messages_payload,
         )
         ai_reply = second_response.choices[0].message.content
