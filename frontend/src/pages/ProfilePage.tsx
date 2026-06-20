@@ -69,16 +69,47 @@ export default function ProfilePage() {
   const [keyStatus, setKeyStatus] = useState<KeyStatus>('none');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const maskedKey =
     groqKey.length > 8 ? groqKey.slice(0, 4) + '••••••••' + groqKey.slice(-4) : groqKey;
 
   const handleValidate = () => {
-    if (!groqKey.trim()) { setKeyStatus('invalid'); return; }
+    //basic syntax check
+    if (!groqKey.trim() || !groqKey.startsWith('gsk_')) {
+      setKeyStatus('invalid');
+      setValidationError('Key must start with "gsk_". Get yours at console.groq.com.');
+      return;
+    } 
+
     setKeyStatus('validating');
-    setTimeout(() => {
-      setKeyStatus(groqKey.startsWith('gsk_') ? 'valid' : 'invalid');
-    }, 1200);
+    setValidationError(null); // Clear previous errors
+
+    try {
+      // Make a test request to Groq API 
+      fetch('https://api.groq.com/openai/v1/models', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'content-type': 'application/json',
+        }
+      })
+        .then(response => {
+          if (response.ok) {
+            setKeyStatus('valid');
+          } else {
+            setKeyStatus('invalid');
+            setValidationError('Invalid key. Please check your key and try again.');
+          }
+        })
+        .catch(() => { // Network or other error
+          setKeyStatus('invalid');
+          setValidationError('Network error. Please try again later.');
+        });
+    } catch (error) {
+      setKeyStatus('invalid');
+      setValidationError('Unexpected error. Please try again later.');
+    }
   };
 
   const handleSave = () => {
