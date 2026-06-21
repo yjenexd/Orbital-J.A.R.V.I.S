@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 import json
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Header, Depends
+from fastapi import FastAPI, HTTPException, Query, Header, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -10,7 +10,6 @@ from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
 from supabase import create_client, Client
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-
 
 
 load_dotenv()
@@ -371,6 +370,64 @@ tools = [
         }
     }
 ]
+
+async def triage_task_background(task_id: int, user_id: str, title: str, deadline: str, x_groq_api_key: str):
+    if not x_groq_api_key:
+        print("API_KEY_MISSING: Cannot perform triage without a valid API key.")
+        return
+    
+    client = AsyncOpenAI(
+        base_url="https://api.groq.com/openai/v1",
+        api_key=x_groq_api_key
+    )
+
+    triage_prompt = f"""
+    You are J.A.R.V.I.S's task triage engine. Evaluate the following task and return a JSON object evaluating its priority
+
+    Task Title: {title}
+    Deadline: {deadline}
+    Current Date: {curr_date.isoformat()}
+
+    Evaluate based on a university student's lifestyle, academic workload, and personal commitments. Consider the urgency of the deadline, the typical time required for such a task, and how it fits into the user's overall schedule.:
+    - Due within 48 hours: high priority (score 80-100)
+    - Due within 3-7 days: medium priority (score 50-79)
+    - Due in more than 7 days or minor errand: low priority (score 0-49)
+    - if the user tells you it is important, adjust the score upwards by 10-20 points, but do not exceed 100.
+    
+    Return EXACTLY this JSON format and nothing else:
+    {{
+        "priority_level": "high",
+        "priority_score": 85,
+        "triage_rationale": "One short sentence explaining why."
+    }}
+    """
+
+    try: 
+        response = await client.chat.completions.create(
+            model = "llama3-8b-8192",
+            messages=[{"role": "user", "content": triage_prompt}],
+            response_format={"type": "json_object"}
+        )
+
+        #unpack the JSON response from the LLM
+        ai_data = json.loads(response.choices[0].message.content) ##convert the string response back into a JSON object we can work with
+
+        #update the database, include fallback data
+        supabase.table("tasks").update({
+            "priority": ai_data.get("priority_level", "medium"),
+            "priority_score": ai_data.get("priority_score", 50),
+            "triage_rationale": ai_data.get("triage_rationale", "..pending review by AI triage engine..")
+        }).eq("task_id", task_id).eq("user_id", user_id).execute()
+
+    except Exception as e:
+        print(f"Triage failed for task {task_id}: {str(e)}")
+        # Fallback if the AI fails
+        supabase.table("tasks").update({
+            "priority_score": 50,
+            "triage_rationale": "Standard sorting applied (AI Triage offline)."
+        }).eq("task_id", task_id).execute()
+    finally:
+        await client.close()
 
 @app.post("/chat") #only messages table queried for now
 async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_groq_client)):
