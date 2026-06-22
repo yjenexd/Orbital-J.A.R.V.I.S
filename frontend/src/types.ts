@@ -16,13 +16,15 @@ export type UserSchedule = CalendarEvent[];
 
 export interface Task {
     task_id: number;
-    task: string;
-    origin: string;
+    title: string;
+    source: string;
     deadline: string;
-    status:boolean;
+    completed:boolean;
     user_id: string;
-    priority: number;
+    priority: string;
     email_id?: number | null;
+    triage_rationale?: string | null;
+    priority_score: number;
 }
 
 export interface Email {

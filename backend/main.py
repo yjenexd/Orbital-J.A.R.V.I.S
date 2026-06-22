@@ -94,7 +94,7 @@ You act as the central intelligence orchestrator. For every user input, classify
 def get_tasks():
     try:
         data = supabase.table("tasks") \
-            .select("task_id, title, priority, priority_score, triage_rationale source, deadline, completed") \
+            .select("task_id, title, priority, priority_score, triage_rationale, source, deadline, completed") \
             .eq("user_id", user_id) \
             .order("completed", desc=False) \
             .order("priority_score", desc=True) \
@@ -213,15 +213,17 @@ tools = [
             }
         }
     },
-    {
+{
         "type": "function",
         "function": {
             "name": "update_task",
             "description": (
-                f"Update an existing task, such as marking it as completed or changing its priority. If you do not know the task_id, "
-                f"you must fetch the user's tasks first. If task does not exist, you should not call this function; instead, "
-                f"if the user is describing a new task, you should call add_task to create it in the database. "
-                f"Only use update_task when you are certain the task already exists and you are modifying its status or priority."
+                "Update an existing task. CRITICAL OVERRIDE: If the user provides vague conversational context regarding a task update"
+                "(e.g., 'it is important', 'I need more time', 'update this task'), you MUST IMMEDIATELY call this function "
+                "using ONLY the 'task_id' and the 'user_context' fields. "
+                "DO NOT ask the user to clarify the priority level, deadline, or completion status. "
+                "The background AI triage engine is explicitly designed to calculate the new priority from the 'user_context'. "
+                "Only use the exact 'priority' or 'deadline' fields if the user explicitly dictates them."
             ),
             "parameters": {
                 "type": "object",
@@ -231,17 +233,18 @@ tools = [
                         "description": "The unique ID of the task."
                     },
                     "completed": {
-                        "type": "boolean",
-                        "description": "Set to true if the user finished the task, or false if it is incomplete."
+                        "type": "boolean"
                     },
                     "priority": {
                         "type": "string",
-                        "enum": ["low", "medium", "high"],
-                        "description": "The updated urgency of the task."
+                        "enum": ["low", "medium", "high"]
                     },
                     "deadline": {
+                        "type": "string"
+                    },
+                    "user_context": {
                         "type": "string",
-                        "description": "The updated deadline for the task in YYYY-MM-DD format. Optional, but if provided, it should be a valid date string."
+                        "description": "The user's exact quote or context about why the task is changing."
                     }
                 },
                 "required": ["task_id"]
@@ -373,7 +376,7 @@ tools = [
     }
 ]
 
-async def triage_task_background(task_id: int, user_id: str, title: str, deadline: str, x_groq_api_key: str):
+async def triage_task_background(task_id: int, user_id: str, title: str, deadline: str, x_groq_api_key: str, user_context: str = ""):
     if not x_groq_api_key:
         print("API_KEY_MISSING: Cannot perform triage without a valid API key.")
         return
@@ -389,6 +392,7 @@ async def triage_task_background(task_id: int, user_id: str, title: str, deadlin
     Task Title: {title}
     Deadline: {deadline}
     Current Date: {curr_date.isoformat()}
+    User Update Notes: '{user_context if user_context else "None"}'
 
     Evaluate based on a university student's lifestyle, academic workload, and personal commitments. Consider the urgency of the deadline, the typical time required for such a task, and how it fits into the user's overall schedule.:
     - Due within 48 hours: high priority (score 80-100)
@@ -406,7 +410,7 @@ async def triage_task_background(task_id: int, user_id: str, title: str, deadlin
 
     try: 
         response = await client.chat.completions.create(
-            model = "llama3-8b-8192",
+            model = "openai/gpt-oss-20b",
             messages=[{"role": "user", "content": triage_prompt}],
             response_format={"type": "json_object"}
         )
@@ -550,15 +554,39 @@ async def execute_chat(
                             function_response = json.dumps({"status": "success", "message": "Task added successfully."})
                     
                     elif function_name == "update_task":
+                        task_id_int = int(function_args["task_id"])
                         update_payload = {}
+                        
                         if "completed" in function_args: update_payload["completed"] = function_args["completed"]
                         if "priority" in function_args: update_payload["priority"] = function_args["priority"]
                         if "deadline" in function_args: update_payload["deadline"] = function_args["deadline"]
 
-                        res = supabase.table("tasks").update(update_payload)\
-                            .eq("task_id", int(function_args["task_id"])) \
-                            .eq("user_id", user_id).execute()
-                        function_response = json.dumps({"status": "success", "message": "Task updated successfully."})
+                        # 1. Update the database with any explicit fields provided
+                        if update_payload:
+                            supabase.table("tasks").update(update_payload)\
+                                .eq("task_id", task_id_int) \
+                                .eq("user_id", user_id).execute()
+
+                        # 2. Fetch the task data so the triage engine knows what it's looking at
+                        task_res = supabase.table("tasks").select("title, deadline").eq("task_id", task_id_int).execute()
+                        
+                        if task_res.data:
+                            updated_task = task_res.data[0]
+                            # If the LLM didn't pass context, fallback to the raw user message
+                            context = function_args.get("user_context", user_message)
+                            
+                            # 3. Fire the background worker!
+                            background_tasks.add_task(
+                                triage_task_background,
+                                task_id=task_id_int,
+                                user_id=user_id,
+                                title=updated_task["title"],
+                                deadline=updated_task.get("deadline", "none"),
+                                x_groq_api_key=x_groq_api_key,
+                                user_context=context
+                            )
+                            
+                        function_response = json.dumps({"status": "success", "message": "Task updated and queued for AI re-triage."})
 
                     elif function_name == "delete_task":
                         if not function_args.get("user_confirmed"):
