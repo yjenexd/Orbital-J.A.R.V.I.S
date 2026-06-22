@@ -19,8 +19,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
+      if (event === 'SIGNED_IN' && session?.provider_refresh_token) {
+        await supabase
+          .from('users')
+          .update({ google_refresh_token: session.provider_refresh_token })
+          .eq('id', session.user.id)
+      }
     })
 
     return () => subscription.unsubscribe()

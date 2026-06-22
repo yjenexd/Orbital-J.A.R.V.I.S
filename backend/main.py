@@ -6,10 +6,11 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
-from openai import AsyncOpenAI, APIError # NEW: Importing OpenAI
+from openai import AsyncOpenAI, APIError
 from supabase import create_client, Client
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+import httpx
 
 
 load_dotenv()
@@ -39,16 +40,29 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 async def get_current_user(authorization: str = Header(...)) -> str:
     try:
-        token = authorization.removeprefix("Bearer ")
-        result = supabase.auth.get_user(token)
-        return result.user.id
-    except Exception:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={"Authorization": authorization, "apikey": SUPABASE_KEY},
+            )
+        print(f"[AUTH] status={response.status_code} body={response.text[:300]}")
+        if response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        return response.json()["id"]
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[AUTH ERROR] {type(e).__name__}: {e}")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-def get_google_calendar_service():
+def get_google_calendar_service(user_id: str):
+    res = supabase.table("users").select("google_refresh_token").eq("id", user_id).single().execute()
+    refresh_token = res.data.get("google_refresh_token") if res.data else None
+    if not refresh_token:
+        raise HTTPException(status_code=403, detail="Google Calendar not connected. Please sign in again to grant access.")
     creds = Credentials(
         token=None,
-        refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+        refresh_token=refresh_token,
         client_id=os.getenv("GOOGLE_CLIENT_ID"),
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         token_uri="https://oauth2.googleapis.com/token"
@@ -115,9 +129,9 @@ def get_schedule(user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/calendar")
-def get_calendar(time_min: str = Query(default=None), time_max: str = Query(default=None), _: str = Depends(get_current_user)):
+def get_calendar(time_min: str = Query(default=None), time_max: str = Query(default=None), user_id: str = Depends(get_current_user)):
     try:
-        service = get_google_calendar_service()
+        service = get_google_calendar_service(user_id)
         
         # If no time_min provided, default to current month start
         if not time_min:
