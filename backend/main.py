@@ -94,8 +94,10 @@ You act as the central intelligence orchestrator. For every user input, classify
 def get_tasks():
     try:
         data = supabase.table("tasks") \
-            .select("task_id, title, priority, source, deadline, completed") \
+            .select("task_id, title, priority, priority_score, triage_rationale source, deadline, completed") \
             .eq("user_id", user_id) \
+            .order("completed", desc=False) \
+            .order("priority_score", desc=True) \
             .order("deadline", desc=False) \
             .execute().data
         return {"tasks": data}
@@ -430,7 +432,12 @@ async def triage_task_background(task_id: int, user_id: str, title: str, deadlin
         await client.close()
 
 @app.post("/chat") #only messages table queried for now
-async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_groq_client)):
+async def execute_chat(
+    request: ChatRequest, 
+    background_tasks: BackgroundTasks,
+    client: AsyncOpenAI = Depends(get_groq_client),
+    x_groq_api_key: str = Header(None)):
+
     user_id = request.user_id
     user_message = request.message
 
@@ -527,6 +534,19 @@ async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_g
                                 insert_payload["deadline"] = deadline_val
 
                             res = supabase.table("tasks").insert(insert_payload).execute()
+
+                            #trigger the background triage process to evaluate the priority of this new task
+                            if res.data:
+                                new_task = res.data[0]
+                                background_tasks.add_task( 
+                                    triage_task_background, 
+                                    task_id=new_task["task_id"], 
+                                    user_id=user_id, 
+                                    title=new_task["title"], 
+                                    deadline=new_task.get("deadline", "none"), 
+                                    x_groq_api_key=x_groq_api_key
+                                )
+
                             function_response = json.dumps({"status": "success", "message": "Task added successfully."})
                     
                     elif function_name == "update_task":
