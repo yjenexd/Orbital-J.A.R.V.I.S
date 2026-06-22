@@ -1,18 +1,8 @@
 import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material';
 import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
-import { useEffect, useState } from 'react';
-import { API_URL } from "../api";
-
-
-
-interface Task {
-  task_id: number;
-  title: string;
-  priority: 'high' | 'medium' | 'low';
-  source: string;
-  deadline?: string;
-  completed: boolean;
-}
+import { useEffect, useMemo, useState } from 'react';
+import { API_URL } from '../api';
+import type { Task } from '../types';
 
 export function TaskPanel() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -41,17 +31,19 @@ export function TaskPanel() {
       }
     };
 
-    //Fetch immediately on component mount
     void loadTasks();
 
-    // Set up the polling interval (refresh every 5 seconds)
     const interval = setInterval(() => {
       void loadTasks();
     }, 5000);
 
-    // Cleanup the interval when the component unmounts
     return () => clearInterval(interval);
   }, []);
+
+  const sortedTasks = useMemo(
+    () => [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed)),
+    [tasks]
+  );
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {
     switch (priority) {
@@ -74,7 +66,7 @@ export function TaskPanel() {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
-          {tasks.map((task) => (
+          {sortedTasks.map((task) => (
             <Box
               key={task.task_id}
               sx={{
@@ -111,9 +103,21 @@ export function TaskPanel() {
                     />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    <Chip label={task.source} size="small" variant="outlined" />
+                    {task.source && (
+                      <Chip label={task.source} size="small" variant="outlined" />
+                    )}
                     {task.deadline && (
                       <Chip label={task.deadline} size="small" variant="outlined" />
+                    )}
+
+                    {task.priority_score !== undefined && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontStyle: 'italic', display: 'block', width: '100%', mt: 0.5 }}
+                      >
+                        Score: {task.priority_score}/100 - {task.triage_rationale}
+                      </Typography>
                     )}
                   </Box>
                 </Box>
