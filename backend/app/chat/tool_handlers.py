@@ -1,10 +1,20 @@
 import json
 from typing import Any
 
+from fastapi import BackgroundTasks
+
+from app.chat.triage import triage_task_background
 from app.clients import supabase
 
 
-def execute_tool_call(function_name: str, function_args: dict[str, Any], user_id: str) -> str:
+def execute_tool_call(
+    function_name: str,
+    function_args: dict[str, Any],
+    user_id: str,
+    user_message: str = "",
+    background_tasks: BackgroundTasks | None = None,
+    x_groq_api_key: str | None = None,
+) -> str:
     function_response = json.dumps({"status": "error", "message": "Unknown function."})
 
     if function_name == "add_task":
@@ -27,11 +37,25 @@ def execute_tool_call(function_name: str, function_args: dict[str, Any], user_id
         if str(deadline_val).lower() != "none":
             insert_payload["deadline"] = deadline_val
 
-        supabase.table("tasks").insert(insert_payload).execute()
+        res = supabase.table("tasks").insert(insert_payload).execute()
+
+        if background_tasks and x_groq_api_key and res.data:
+            new_task = res.data[0]
+            background_tasks.add_task(
+                triage_task_background,
+                task_id=new_task["task_id"],
+                user_id=user_id,
+                title=new_task["title"],
+                deadline=new_task.get("deadline", "none"),
+                x_groq_api_key=x_groq_api_key,
+            )
+
         return json.dumps({"status": "success", "message": "Task added successfully."})
 
     if function_name == "update_task":
+        task_id_int = int(function_args["task_id"])
         update_payload = {}
+
         if "completed" in function_args:
             update_payload["completed"] = function_args["completed"]
         if "priority" in function_args:
@@ -39,10 +63,27 @@ def execute_tool_call(function_name: str, function_args: dict[str, Any], user_id
         if "deadline" in function_args:
             update_payload["deadline"] = function_args["deadline"]
 
-        supabase.table("tasks").update(update_payload).eq("task_id", int(function_args["task_id"])).eq(
-            "user_id", user_id
-        ).execute()
-        return json.dumps({"status": "success", "message": "Task updated successfully."})
+        if update_payload:
+            supabase.table("tasks").update(update_payload).eq("task_id", task_id_int).eq(
+                "user_id", user_id
+            ).execute()
+
+        task_res = supabase.table("tasks").select("title, deadline").eq("task_id", task_id_int).execute()
+
+        if background_tasks and x_groq_api_key and task_res.data:
+            updated_task = task_res.data[0]
+            context = function_args.get("user_context", user_message)
+            background_tasks.add_task(
+                triage_task_background,
+                task_id=task_id_int,
+                user_id=user_id,
+                title=updated_task["title"],
+                deadline=updated_task.get("deadline", "none"),
+                x_groq_api_key=x_groq_api_key,
+                user_context=context,
+            )
+
+        return json.dumps({"status": "success", "message": "Task updated and queued for AI re-triage."})
 
     if function_name == "delete_task":
         if not function_args.get("user_confirmed"):

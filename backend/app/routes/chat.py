@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from openai import APIError, AsyncOpenAI
 
 from app.chat.tool_definitions import TOOLS
@@ -14,7 +14,12 @@ router = APIRouter()
 
 
 @router.post("/chat")
-async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_groq_client)):
+async def execute_chat(
+    request: ChatRequest,
+    background_tasks: BackgroundTasks,
+    client: AsyncOpenAI = Depends(get_groq_client),
+    x_groq_api_key: str | None = Header(default=None),
+):
     user_id = request.user_id
     user_message = request.message
 
@@ -91,7 +96,14 @@ async def execute_chat(request: ChatRequest, client: AsyncOpenAI = Depends(get_g
                 print(f" [AI TOOL CALL] -> {function_name} | Args: {function_args}")
 
                 try:
-                    function_response = execute_tool_call(function_name, function_args, user_id)
+                    function_response = execute_tool_call(
+                        function_name,
+                        function_args,
+                        user_id,
+                        user_message=user_message,
+                        background_tasks=background_tasks,
+                        x_groq_api_key=x_groq_api_key,
+                    )
                 except Exception as db_error:
                     function_response = json.dumps(
                         {"status": "error", "message": f"Database operation failed: {str(db_error)}"}

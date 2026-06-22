@@ -36,10 +36,12 @@ TOOLS = [
         "function": {
             "name": "update_task",
             "description": (
-                f"Update an existing task, such as marking it as completed or changing its priority. If you do not know the task_id, "
-                f"you must fetch the user's tasks first. If task does not exist, you should not call this function; instead, "
-                f"if the user is describing a new task, you should call add_task to create it in the database. "
-                f"Only use update_task when you are certain the task already exists and you are modifying its status or priority."
+                "Update an existing task. CRITICAL OVERRIDE: If the user provides vague conversational context regarding a task update"
+                "(e.g., 'it is important', 'I need more time', 'update this task'), you MUST IMMEDIATELY call this function "
+                "using ONLY the 'task_id' and the 'user_context' fields. "
+                "DO NOT ask the user to clarify the priority level, deadline, or completion status. "
+                "The background AI triage engine is explicitly designed to calculate the new priority from the 'user_context'. "
+                "Only use the exact 'priority' or 'deadline' fields if the user explicitly dictates them."
             ),
             "parameters": {
                 "type": "object",
@@ -50,16 +52,17 @@ TOOLS = [
                     },
                     "completed": {
                         "type": "boolean",
-                        "description": "Set to true if the user finished the task, or false if it is incomplete.",
                     },
                     "priority": {
                         "type": "string",
                         "enum": ["low", "medium", "high"],
-                        "description": "The updated urgency of the task.",
                     },
                     "deadline": {
                         "type": "string",
-                        "description": "The updated deadline for the task in YYYY-MM-DD format. Optional, but if provided, it should be a valid date string.",
+                    },
+                    "user_context": {
+                        "type": "string",
+                        "description": "The user's exact quote or context about why the task is changing.",
                     },
                 },
                 "required": ["task_id"],

@@ -12,8 +12,10 @@ def get_tasks():
     try:
         data = (
             supabase.table("tasks")
-            .select("task_id, title, priority, source, deadline, completed")
+            .select("task_id, title, priority, priority_score, triage_rationale, source, deadline, completed")
             .eq("user_id", USER_ID)
+            .order("completed", desc=False)
+            .order("priority_score", desc=True)
             .order("deadline", desc=False)
             .execute()
             .data
