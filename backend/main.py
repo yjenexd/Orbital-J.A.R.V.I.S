@@ -766,10 +766,10 @@ async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client
             raise e
         
         raise HTTPException(status_code=500, detail="failed to initialize summary")
+from app.app_factory import app
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
