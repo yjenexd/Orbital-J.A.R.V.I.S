@@ -1,27 +1,37 @@
-import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material'
-import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material'
-import { useEffect, useMemo, useState } from 'react'
-import { API_URL } from '../api'
-import { useAuth } from '../contexts/AuthContext'
-import type { Task } from '../types'
+import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material';
+import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { API_URL } from "../api";
+import { useAuth } from '../contexts/AuthContext';
+
+
+
+interface Task {
+  task_id: number;
+  title: string;
+  priority: 'high' | 'medium' | 'low';
+  source: string;
+  deadline?: string;
+  completed: boolean;
+}
 
 export function TaskPanel() {
-  const { session } = useAuth()
-  const [tasks, setTasks] = useState<Task[]>([])
+  const { session } = useAuth();
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    if (!session) return
+    if (!session) return;
     const loadTasks = async () => {
       try {
         const response = await fetch(`${API_URL}/tasks`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        })
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+        });
 
         if (!response.ok) {
-          throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`)
+          throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`);
         }
 
-        const data: unknown = await response.json()
+        const data: unknown = await response.json();
 
         if (
           typeof data === 'object' &&
@@ -29,37 +39,35 @@ export function TaskPanel() {
           'tasks' in data &&
           Array.isArray(data.tasks)
         ) {
-          setTasks(data.tasks as Task[])
+          setTasks(data.tasks as Task[]);
         }
       } catch (error) {
-        console.error('Failed to fetch tasks', error)
+        console.error('Failed to fetch tasks', error);
       }
-    }
+    };
 
-    void loadTasks()
+    //Fetch immediately on component mount
+    void loadTasks();
 
+    // Set up the polling interval (refresh every 5 seconds)
     const interval = setInterval(() => {
-      void loadTasks()
-    }, 5000)
+      void loadTasks();
+    }, 5000);
 
-    return () => clearInterval(interval)
-  }, [session])
-
-  const sortedTasks = useMemo(
-    () => [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed)),
-    [tasks]
-  )
+    // Cleanup the interval when the component unmounts
+    return () => clearInterval(interval);
+  }, [session]);
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {
     switch (priority) {
       case 'high':
-        return 'error'
+        return 'error';
       case 'medium':
-        return 'warning'
+        return 'warning';
       default:
-        return 'action'
+        return 'action';
     }
-  }
+  };
 
   return (
     <Card sx={{ display: 'flex', flexDirection: 'column', maxHeight: 600 }}>
@@ -71,7 +79,7 @@ export function TaskPanel() {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto' }}>
-          {sortedTasks.map((task) => (
+          {tasks.map((task) => (
             <Box
               key={task.task_id}
               sx={{
@@ -108,17 +116,9 @@ export function TaskPanel() {
                     />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    {task.source && <Chip label={task.source} size="small" variant="outlined" />}
-                    {task.deadline && <Chip label={task.deadline} size="small" variant="outlined" />}
-
-                    {task.priority_score !== undefined && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontStyle: 'italic', display: 'block', width: '100%', mt: 0.5 }}
-                      >
-                        Score: {task.priority_score}/100 - {task.triage_rationale}
-                      </Typography>
+                    <Chip label={task.source} size="small" variant="outlined" />
+                    {task.deadline && (
+                      <Chip label={task.deadline} size="small" variant="outlined" />
                     )}
                   </Box>
                 </Box>
@@ -128,5 +128,5 @@ export function TaskPanel() {
         </Box>
       </CardContent>
     </Card>
-  )
+  );
 }

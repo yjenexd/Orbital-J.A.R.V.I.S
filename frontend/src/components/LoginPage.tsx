@@ -30,7 +30,7 @@ export default function LoginPage() {
         gap: 3,
       }}
     >
-      <Typography variant="h4" fontWeight="bold" color="primary">
+      <Typography variant="h4" sx={{ fontWeight: 'bold' }} color="primary">
         J².A.R.V.I.S
       </Typography>
       <Typography variant="body1" color="text.secondary">

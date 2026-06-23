@@ -1,27 +1,22 @@
-import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material'
-import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material'
-import { useEffect, useMemo, useState } from 'react'
-import { API_URL } from '../api'
-import { useAuth } from '../contexts/AuthContext'
-import type { Task } from '../types'
+import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material';
+import { CheckBox, Flag, RadioButtonUnchecked } from '@mui/icons-material';
+import { useEffect, useMemo, useState } from 'react';
+import { API_URL } from '../api';
+import type { Task } from '../types';
 
 export function TaskPanel() {
-  const { session } = useAuth()
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   useEffect(() => {
-    if (!session) return
     const loadTasks = async () => {
       try {
-        const response = await fetch(`${API_URL}/tasks`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        })
+        const response = await fetch(`${API_URL}/tasks`);
 
         if (!response.ok) {
-          throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`)
+          throw new Error(`Failed to load tasks: ${response.status} ${response.statusText}`);
         }
 
-        const data: unknown = await response.json()
+        const data: unknown = await response.json();
 
         if (
           typeof data === 'object' &&
@@ -29,37 +24,37 @@ export function TaskPanel() {
           'tasks' in data &&
           Array.isArray(data.tasks)
         ) {
-          setTasks(data.tasks as Task[])
+          setTasks(data.tasks as Task[]);
         }
       } catch (error) {
-        console.error('Failed to fetch tasks', error)
+        console.error('Failed to fetch tasks', error);
       }
-    }
+    };
 
-    void loadTasks()
+    void loadTasks();
 
     const interval = setInterval(() => {
-      void loadTasks()
-    }, 5000)
+      void loadTasks();
+    }, 5000);
 
-    return () => clearInterval(interval)
-  }, [session])
+    return () => clearInterval(interval);
+  }, []);
 
   const sortedTasks = useMemo(
     () => [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed)),
     [tasks]
-  )
+  );
 
   const getPriorityColor = (priority: string): 'error' | 'warning' | 'action' => {
     switch (priority) {
       case 'high':
-        return 'error'
+        return 'error';
       case 'medium':
-        return 'warning'
+        return 'warning';
       default:
-        return 'action'
+        return 'action';
     }
-  }
+  };
 
   return (
     <Card sx={{ display: 'flex', flexDirection: 'column', maxHeight: 600 }}>
@@ -108,8 +103,12 @@ export function TaskPanel() {
                     />
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                    {task.source && <Chip label={task.source} size="small" variant="outlined" />}
-                    {task.deadline && <Chip label={task.deadline} size="small" variant="outlined" />}
+                    {task.source && (
+                      <Chip label={task.source} size="small" variant="outlined" />
+                    )}
+                    {task.deadline && (
+                      <Chip label={task.deadline} size="small" variant="outlined" />
+                    )}
 
                     {task.priority_score !== undefined && (
                       <Typography
@@ -128,5 +127,5 @@ export function TaskPanel() {
         </Box>
       </CardContent>
     </Card>
-  )
+  );
 }

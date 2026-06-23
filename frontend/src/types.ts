@@ -9,20 +9,22 @@ export interface CalendarEvent {
     time: string;
     event: string;
     protected: boolean;
-    user_id: number;
+    user_id: string;
 }
 
 export type UserSchedule = CalendarEvent[];
 
 export interface Task {
     task_id: number;
-    task: string;
-    origin: string;
+    title: string;
+    source: string;
     deadline: string;
-    status:boolean;
-    user_id: number;
-    priority: number;
+    completed:boolean;
+    user_id: string;
+    priority: string;
     email_id?: number | null;
+    triage_rationale?: string | null;
+    priority_score: number;
 }
 
 export interface Email {
@@ -30,7 +32,7 @@ export interface Email {
     date: string;     // timestamp
     sender: string;
     summary: string;
-    user_id: number;  // int8 (Foreign Key)
+    user_id: string;  // int8 (Foreign Key)
     subject: string;
     urgency: 'low' | 'medium' | 'high'; // Custom email_urgency type
 }
