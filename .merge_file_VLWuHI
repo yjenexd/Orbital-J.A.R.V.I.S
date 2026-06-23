@@ -1,15 +1,11 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import './App.css'
 import AppLayout from './components/AppLayout'
 import LoginPage from './components/LoginPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import CalendarPage from './pages/CalendarPage'
-import DashboardPage from './pages/DashboardPage'
-import ProfilePage from './pages/ProfilePage'
 
-function AppRoutes() {
+function AppContent() {
   const { session, loading } = useAuth()
 
   if (loading) {
@@ -20,28 +16,14 @@ function AppRoutes() {
     )
   }
 
-  if (!session) {
-    return <LoginPage />
-  }
-
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="calendar" element={<CalendarPage />} />
-          <Route path="profile" element={<ProfilePage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
-  )
+  return session ? <AppLayout /> : <LoginPage />
 }
 
 function App() {
   return (
     <AuthProvider>
       <Box sx={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <AppRoutes />
+        <AppContent />
       </Box>
     </AuthProvider>
   )

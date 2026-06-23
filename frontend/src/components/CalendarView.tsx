@@ -6,6 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { Box, Typography } from '@mui/material';
 import type { EventClickArg } from '@fullcalendar/core';
 import { API_URL } from "../api";
+import { useAuth } from '../contexts/AuthContext';
 
 
 interface ScheduleEvent {
@@ -17,13 +18,16 @@ interface ScheduleEvent {
 }
 
 export function CalendarView() {
+  const { session } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
 
   const handleDatesSet = (dateInfo: any) => {
     const timeMin = new Date(dateInfo.start).toISOString();
     const timeMax = new Date(dateInfo.end).toISOString();
-    
-    fetch(`${API_URL}/calendar?time_min=${timeMin}&time_max=${timeMax}`)
+
+    fetch(`${API_URL}/calendar?time_min=${timeMin}&time_max=${timeMax}`, {
+      headers: { 'Authorization': `Bearer ${session?.access_token}` },
+    })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
         return r.json();

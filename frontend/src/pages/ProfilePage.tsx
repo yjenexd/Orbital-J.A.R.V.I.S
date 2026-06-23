@@ -241,9 +241,9 @@ export default function ProfilePage() {
             }}
           />
 
-          {keyStatus === 'invalid' && (
+          {keyStatus === 'invalid' && validationError && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              Key must start with <strong>gsk_</strong>. Get yours at console.groq.com.
+              {validationError}
             </Alert>
           )}
 

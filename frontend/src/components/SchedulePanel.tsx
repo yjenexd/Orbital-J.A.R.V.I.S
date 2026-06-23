@@ -2,6 +2,7 @@ import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
 import { CalendarMonth, Warning, Shield } from '@mui/icons-material';
 import { useEffect, useState } from 'react';
 import { API_URL } from "../api";
+import { useAuth } from '../contexts/AuthContext';
 
 
 interface ScheduleEvent {
@@ -36,11 +37,15 @@ function detectConflicts(events: ScheduleEvent[]): Set<number> {
 }
 
 export function SchedulePanel() {
+  const { session } = useAuth();
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
 
 useEffect(() => {
+    if (!session) return;
     const fetchSchedule = () => {
-      fetch(`${API_URL}/schedule`)
+      fetch(`${API_URL}/schedule`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      })
         .then(r => {
           if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
           return r.json();
@@ -62,10 +67,10 @@ useEffect(() => {
         });
     };
 
-    fetchSchedule(); 
-    const interval = setInterval(fetchSchedule, 5000); 
+    fetchSchedule();
+    const interval = setInterval(fetchSchedule, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [session]);
 
   const conflicts = detectConflicts(events);
 
