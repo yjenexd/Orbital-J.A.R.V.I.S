@@ -38,14 +38,17 @@ SUPABASE_KEY = _get_required_env_var("SUPABASE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-async def get_current_user(authorization: str = Header(...)) -> str:
+async def get_current_user(authorization: str = Header(default=None)) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{SUPABASE_URL}/auth/v1/user",
                 headers={"Authorization": authorization, "apikey": SUPABASE_KEY},
             )
-        print(f"[AUTH] status={response.status_code} body={response.text[:300]}")
+        print(f"[AUTH] status={response.status_code}")
         if response.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
         return response.json()["id"]
