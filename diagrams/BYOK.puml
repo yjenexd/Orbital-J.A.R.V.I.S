@@ -1,0 +1,43 @@
+@startuml
+skinparam maxMessageSize 200
+skinparam defaultTextAlignment center
+
+actor User
+participant "Frontend Client" as Frontend
+database "Browser Storage\n(localStorage)" as Storage
+participant "FastAPI Backend" as Backend
+participant "Groq API" as Groq
+
+== Key Setup (One-time per device/session) ==
+
+User -> Frontend: Inputs Groq API Key\n(Settings Panel)
+Frontend -> Storage: Saves API Key locally
+Storage --> Frontend: Acknowledges save
+Frontend --> User: Displays success message
+
+== Execution Flow ==
+
+User -> Frontend: Submits prompt or triggers action
+Frontend -> Storage: Retrieves stored Groq API Key
+Storage --> Frontend: Returns API Key
+Frontend -> Backend: Sends request\n(Header: X-Groq-Api-Key)
+
+note over Backend
+  Intercepts X-Groq-Api-Key header
+  Initializes ephemeral AsyncGroq client
+  strictly for this execution context
+end note
+
+Backend -> Groq: Sends completion request using ephemeral client
+Groq --> Backend: Returns generated response
+
+note over Backend
+  Returns response to client
+  Garbage collects ephemeral client
+  (Key is wiped from server memory)
+end note
+
+Backend --> Frontend: Returns processed response
+Frontend --> User: Displays visualization / result
+
+@enduml
