@@ -5,7 +5,7 @@ from openai import APIError, AsyncOpenAI
 
 from app.chat.tool_definitions import TOOLS
 from app.chat.tool_handlers import execute_tool_call
-from app.clients import get_groq_client, supabase
+from app.clients import get_google_calendar_service, get_groq_client, supabase
 from app.config import CURR_DATE, SYSTEM_PROMPT
 from app.schemas import ChatRequest
 
@@ -57,14 +57,26 @@ async def execute_chat(
             .execute()
         )
 
-        user_name = (
+        user_row = (
             supabase.table("users")
-            .select("name")
+            .select("name, google_refresh_token")
             .eq("id", user_id)
             .single()
             .execute()
-            .data.get("name", "Unknown")
+            .data
         )
+        user_name = user_row.get("name", "Unknown")
+
+        gcal_service = None
+        google_refresh_token = user_row.get("google_refresh_token")
+        if google_refresh_token:
+            try:
+                gcal_service = get_google_calendar_service(google_refresh_token)
+                print("[GCAL] Service ready.")
+            except Exception as e:
+                print(f"[GCAL] Failed to build service: {e}")
+        else:
+            print("[GCAL] No refresh token found for user — GCal sync disabled.")
 
         db_context = f"""
         LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
@@ -103,6 +115,7 @@ async def execute_chat(
                         user_message=user_message,
                         background_tasks=background_tasks,
                         x_groq_api_key=x_groq_api_key,
+                        gcal_service=gcal_service,
                     )
                 except Exception as db_error:
                     function_response = json.dumps(
