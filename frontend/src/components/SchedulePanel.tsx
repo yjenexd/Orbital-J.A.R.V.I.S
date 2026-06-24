@@ -1,126 +1,197 @@
-import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
-import { CalendarMonth, Warning, Shield } from '@mui/icons-material';
-import { useEffect, useState } from 'react';
-import { API_URL } from "../api";
-import { useAuth } from '../contexts/AuthContext';
-
+import { Card, CardContent, Typography, Box, Chip } from '@mui/material'
+import { CalendarMonth, Warning, Shield } from '@mui/icons-material'
+import { useEffect, useState } from 'react'
+import { API_URL } from '../api'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ScheduleEvent {
-  event_id: number;
-  date: string;
-  time: string;
-  event: string;
-  protected: boolean;
+  event_id: number
+  date: string
+  time: string
+  event: string
+  protected: boolean
+}
+
+type EventTheme = {
+  itemBg: string
+  itemBorder: string
+  itemAccent: string
+  titleColor: string
+  timeColor: string
 }
 
 function detectConflicts(events: ScheduleEvent[]): Set<number> {
-  const grouped = new Map<string, number[]>();
+  const grouped = new Map<string, number[]>()
 
   for (const event of events) {
-    const key = `${event.date}T${event.time}`;
-    let ids = grouped.get(key);
+    const key = `${event.date}T${event.time}`
+    let ids = grouped.get(key)
 
     if (!ids) {
-      ids = [];
-      grouped.set(key, ids);
+      ids = []
+      grouped.set(key, ids)
     }
 
-    ids.push(event.event_id);
+    ids.push(event.event_id)
   }
 
-  const conflicts = new Set<number>();
+  const conflicts = new Set<number>()
   for (const ids of grouped.values()) {
-    if (ids.length > 1) ids.forEach(id => conflicts.add(id));
+    if (ids.length > 1) ids.forEach((id) => conflicts.add(id))
   }
 
-  return conflicts;
+  return conflicts
+}
+
+function getEventTheme(isConflict: boolean, isProtected: boolean): EventTheme {
+  if (isConflict) {
+    return {
+      itemBg: '#fff4f5',
+      itemBorder: '#f1c8ce',
+      itemAccent: '#eb5b6a',
+      titleColor: '#c84a59',
+      timeColor: '#e06a77',
+    }
+  }
+
+  if (isProtected) {
+    return {
+      itemBg: '#e6f8ee',
+      itemBorder: '#bde4cf',
+      itemAccent: '#20b56f',
+      titleColor: '#2f9364',
+      timeColor: '#3d9f72',
+    }
+  }
+
+  return {
+    itemBg: '#edf1ff',
+    itemBorder: '#ccd9fa',
+    itemAccent: '#5d6ff1',
+    titleColor: '#5a69ce',
+    timeColor: '#7888d4',
+  }
+}
+
+function formatTimeRange(time: string): string {
+  const [hourRaw, minuteRaw] = time.split(':')
+  const hour = Number(hourRaw)
+  const minute = Number(minuteRaw)
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return time
+
+  const start = new Date()
+  start.setHours(hour, minute, 0, 0)
+
+  const end = new Date(start)
+  end.setHours(end.getHours() + 1)
+
+  const format = (date: Date) =>
+    `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+
+  return `${format(start)} - ${format(end)}`
 }
 
 export function SchedulePanel() {
-  const { session } = useAuth();
-  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const { session } = useAuth()
+  const [events, setEvents] = useState<ScheduleEvent[]>([])
 
-useEffect(() => {
-    if (!session) return;
+  useEffect(() => {
+    if (!session) return
     const fetchSchedule = () => {
       fetch(`${API_URL}/schedule`, {
-        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       })
-        .then(r => {
-          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
-          return r.json();
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`)
+          return r.json()
         })
-        .then(data => {
-          // Add safety check before filtering
+        .then((data) => {
           if (!data.schedule || !Array.isArray(data.schedule)) {
-            console.error("Invalid schedule data:", data);
-            setEvents([]);
-            return;
+            console.error('Invalid schedule data:', data)
+            setEvents([])
+            return
           }
-          const today = '2026-05-19';
-          const filtered = data.schedule.filter((e: ScheduleEvent) => e.date === today);
-          setEvents(filtered);
+
+          const today = new Date().toISOString().slice(0, 10)
+          const filtered = data.schedule.filter((e: ScheduleEvent) => e.date === today)
+          setEvents(filtered)
         })
-        .catch(err => {
-          console.error("Failed to fetch schedule:", err);
-          setEvents([]);
-        });
-    };
+        .catch((err) => {
+          console.error('Failed to fetch schedule:', err)
+          setEvents([])
+        })
+    }
 
-    fetchSchedule();
-    const interval = setInterval(fetchSchedule, 5000);
-    return () => clearInterval(interval);
-  }, [session]);
+    fetchSchedule()
+    const interval = setInterval(fetchSchedule, 5000)
+    return () => clearInterval(interval)
+  }, [session])
 
-  const conflicts = detectConflicts(events);
-
-  const getEventIcon = (eventId: number, isProtected: boolean) => {
-    if (conflicts.has(eventId)) return <Warning sx={{ fontSize: 16 }} />;
-    if (isProtected) return <Shield sx={{ fontSize: 16 }} />;
-    return null;
-  };
+  const conflicts = detectConflicts(events)
 
   return (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <CalendarMonth color="primary" />
-          <Typography variant="h6" color="primary">
-            Integrated Schedule
-          </Typography>
+    <Card
+      sx={{
+        borderRadius: '20px',
+        border: '1px solid #e1e7f2',
+        bgcolor: '#ffffff',
+        boxShadow: '0 18px 38px -30px rgba(50, 72, 117, 0.45)',
+      }}
+    >
+      <CardContent sx={{ p: 2.25 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CalendarMonth sx={{ color: '#5b6ef0' }} />
+            <Typography sx={{ color: '#22304f', fontWeight: 700, fontSize: { xs: '1.18rem', sm: '1.3rem' } }}>
+              Today's Schedule
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.1 }}>
+            <Chip icon={<Warning sx={{ fontSize: 14 }} />} label="Conflict" size="small" sx={{ bgcolor: '#fff4f5', color: '#c24b59', border: '1px solid #f1c9ce' }} />
+            <Chip icon={<Shield sx={{ fontSize: 14 }} />} label="Protected" size="small" sx={{ bgcolor: '#edf9f2', color: '#2f9364', border: '1px solid #cae9d8' }} />
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 400, overflowY: 'auto' }}>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 362, overflowY: 'auto', pr: 0.4 }}>
           {[...events]
             .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
-            .map((event) => (
-              <Box
-                key={event.event_id}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1,
-                  border: 1,
-                  borderColor: conflicts.has(event.event_id) ? 'error.main' : event.protected ? 'success.main' : 'divider',
-                  bgcolor: conflicts.has(event.event_id) ? 'error.light' : event.protected ? 'success.light' : 'action.hover',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2,
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 500, minWidth: 80 }}>
-                  {event.time}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-                  {getEventIcon(event.event_id, event.protected)}
-                  <Typography variant="body2">{event.event}</Typography>
+            .map((event) => {
+              const isConflict = conflicts.has(event.event_id)
+              const theme = getEventTheme(isConflict, event.protected)
+
+              return (
+                <Box
+                  key={event.event_id}
+                  sx={{
+                    p: 1.15,
+                    borderRadius: '11px',
+                    border: `1px solid ${theme.itemBorder}`,
+                    bgcolor: theme.itemBg,
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    gap: 1,
+                  }}
+                >
+                  <Box sx={{ width: 4, borderRadius: 99, bgcolor: theme.itemAccent, flexShrink: 0 }} />
+
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body2" sx={{ color: theme.titleColor, fontWeight: 700, lineHeight: 1.35, fontSize: '0.92rem' }}>
+                      {event.event}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: theme.timeColor, fontWeight: 700, fontSize: '0.75rem' }}>
+                      {formatTimeRange(event.time)}
+                    </Typography>
+                  </Box>
+
+                  {isConflict && <Warning sx={{ color: '#e65062', fontSize: 17, mt: 0.3 }} />}
+                  {!isConflict && event.protected && <Shield sx={{ color: '#27a868', fontSize: 17, mt: 0.3 }} />}
                 </Box>
-              </Box>
-            ))}
-        </Box>
-        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider', display: 'flex', gap: 2 }}>
-          <Chip icon={<Warning sx={{ fontSize: 16 }} />} label="Conflict" size="small" variant="outlined" color="error" />
-          <Chip icon={<Shield sx={{ fontSize: 16 }} />} label="Protected Time" size="small" variant="outlined" color="success" />
+              )
+            })}
         </Box>
       </CardContent>
     </Card>
-  );
+  )
 }
