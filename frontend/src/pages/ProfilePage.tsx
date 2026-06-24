@@ -27,8 +27,10 @@ import {
   CheckCircle,
   Cancel,
   HourglassEmpty,
+  Logout,
 } from '@mui/icons-material';
-// import { useAuth } from '../contexts/AuthContext'; // TODO: implement AuthContext
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 type KeyStatus = 'none' | 'validating' | 'valid' | 'invalid';
 
@@ -60,9 +62,15 @@ function avatarInitials(name: string) {
 }
 
 export default function ProfilePage() {
-  // TODO: replace stubs with useAuth() once AuthContext is implemented
-  const [user] = useState<ProfileUser | null>(null);
-  const [loading] = useState(false);
+  const { session, loading } = useAuth();
+  const user: ProfileUser | null = session?.user
+    ? {
+        name: session.user.user_metadata?.full_name ?? session.user.email ?? 'User',
+        email: session.user.email ?? '',
+        avatarUrl: session.user.user_metadata?.avatar_url,
+        raw: { hd: session.user.user_metadata?.hd },
+      }
+    : null;
 
   const [groqKey, setGroqKey] = useState(() => localStorage.getItem('groq_api_key') ?? '');
   const [showKey, setShowKey] = useState(false);
@@ -300,6 +308,18 @@ export default function ProfilePage() {
           </Typography>
         </CardContent>
       </Card>
+
+      {/* Logout */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={<Logout />}
+          onClick={() => supabase.auth.signOut()}
+        >
+          Log out
+        </Button>
+      </Box>
     </Box>
   );
 }
