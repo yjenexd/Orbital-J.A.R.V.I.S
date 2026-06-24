@@ -1,70 +1,59 @@
-import { Box } from '@mui/material';
-import { ChatInterface } from '../components/ChatInterface';
-import { DailyBriefing } from '../components/DailyBriefing';
-import { TaskPanel } from '../components/TaskPanel';
-import { SchedulePanel } from '../components/SchedulePanel';
+import { Box } from '@mui/material'
+import { ChatInterface } from '../components/ChatInterface'
+import { DailyBriefing } from '../components/DailyBriefing'
+import { DashboardSummary } from '../components/DashboardSummary'
+import { TaskPanel } from '../components/TaskPanel'
+import { SchedulePanel } from '../components/SchedulePanel'
 
 export default function DashboardPage() {
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: '65% 35%' },
-        gridTemplateRows: { xs: 'auto 1fr', md: '1fr' },
+        gridTemplateColumns: { xs: '1fr', lg: '1fr 390px' },
         flex: 1,
         minHeight: 0,
+        gap: { xs: 1.25, sm: 1.5 },
       }}
     >
       <Box
         component="main"
         sx={{
-          p: 3,
-          bgcolor: 'background.default',
           minHeight: 0,
-          overflow: 'hidden',
+          overflow: 'auto',
           display: 'grid',
-          gridTemplateRows: 'auto 1fr',
-          gap: 2,
+          gridTemplateRows: 'auto auto 1fr',
+          gap: { xs: 1.25, sm: 1.5 },
+          pr: { lg: 0.5 },
         }}
       >
-        <Box>
-          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1 }}>
-            <DailyBriefing />
-          </Box>
-        </Box>
+        <DashboardSummary />
+        <DailyBriefing />
+
         <Box
           sx={{
-            overflowY: 'auto',
             minHeight: 0,
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-            gap: 2,
+            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+            gap: { xs: 1.25, sm: 1.5 },
+            alignItems: 'start',
           }}
         >
-          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, minHeight: 160 }}>
-            <TaskPanel />
-          </Box>
-          <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, minHeight: 160 }}>
-            <SchedulePanel />
-          </Box>
+          <TaskPanel />
+          <SchedulePanel />
         </Box>
       </Box>
+
       <Box
         component="aside"
         sx={{
-          bgcolor: 'background.paper',
-          borderLeft: { md: 1 },
-          borderColor: 'divider',
           minHeight: 0,
-          position: { xs: 'relative', md: 'sticky' },
-          top: 0,
-          height: { xs: 'auto', md: '100%' },
-          overflowY: 'auto',
-          p: 2,
+          overflow: 'hidden',
+          display: 'flex',
         }}
       >
         <ChatInterface />
       </Box>
     </Box>
-  );
+  )
 }
