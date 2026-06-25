@@ -74,13 +74,11 @@ TOOLS = [
         "function": {
             "name": "delete_task",
             "description": (
-                f"Permanently remove a task from the database. Use only when the user explicitly asks to delete or remove it. "
-                f"Upon receiving a user message that indicates they want to delete a task, "
-                f"you should first confirm the task details with the user (e.g., 'Just to confirm, you want to delete the task "
-                f"\"Finish AI assignment\" with a deadline of May 20th?') before calling this function. "
-                f"If the user confirms, then proceed to call delete_task with the appropriate task_id. "
-                f"If the user does not confirm or if there is any ambiguity about which task to delete, do not call this function "
-                f"and instead ask clarifying questions to ensure you are deleting the correct task."
+                "Permanently remove a task from the database. Use only when the user explicitly asks to delete or remove a task. "
+                "STEP 1 — LOOKUP: Find the task_id from the LIVE DATABASE CONTEXT (Pending Tasks list) by matching the user's description to the correct task title. "
+                "STEP 2 — REQUEST CONFIRMATION: Call this function with user_confirmed=false. The system will block the deletion and instruct you to ask the user to confirm. You MUST then ask: 'Are you sure you want to delete [task name]?' "
+                "STEP 3 — EXECUTE: Only after the user explicitly confirms (e.g. 'yes', 'sure', 'go ahead'), call this function again with the same task_id and user_confirmed=true. "
+                "If multiple tasks match the description, ask the user to clarify before calling."
             ),
             "parameters": {
                 "type": "object",
@@ -168,13 +166,11 @@ TOOLS = [
         "function": {
             "name": "delete_schedule_event",
             "description": (
-                f"Cancel or delete an event from the calendar. If you do not know the event_id, use check_calendar first to find it. "
-                f"You should first call the check_calendar function to confirm the event details with the user "
-                f"(e.g., 'Just to confirm, you want to delete the event \"Project Meeting\" scheduled for May 20th at 3 PM?') "
-                f"before calling this function. "
-                f"If the user confirms, then proceed to call delete_schedule_event with the appropriate event_id. If the user "
-                f"does not confirm or if there is any ambiguity about which event to delete, "
-                f"do not call this function and instead ask clarifying questions to ensure you are deleting the correct event."
+                "Cancel or delete an event from the schedule. Use only when the user explicitly asks to cancel or remove an event. "
+                "STEP 1 — LOOKUP: Find the event_id from the LIVE DATABASE CONTEXT (Calendar Events list) by matching the user's description to the correct event by title, date, and time. Do NOT call any other function to look it up. "
+                "STEP 2 — REQUEST CONFIRMATION: Call this function with user_confirmed=false. The system will block the deletion and instruct you to ask the user to confirm. You MUST then ask: 'Are you sure you want to cancel [event name] on [date] at [time]?' "
+                "STEP 3 — EXECUTE: Only after the user explicitly confirms (e.g. 'yes', 'sure', 'go ahead'), call this function again with the same event_id and user_confirmed=true. "
+                "If multiple events match the description, ask the user to clarify before calling."
             ),
             "parameters": {
                 "type": "object",
