@@ -1,0 +1,91 @@
+// alt D to generate diagram
+
+@startuml
+!theme plain
+autonumber
+
+actor User
+participant "Chat Interface\n(Frontend)" as UI
+participant "FastAPI Backend" as API
+participant "Background\nTask Worker" as Worker
+database "Supabase" as DB
+participant "Groq API\n(LLM)" as LLM
+
+group Task Creation & Triage Process
+    User -> UI: Input task command
+    activate UI
+    
+    UI -> API: POST /task (command)
+    activate API
+    
+    API -> DB: INSERT task (status: "pending")
+    activate DB
+    DB --> API: Return Task ID
+    deactivate DB
+    
+    API -> Worker: Trigger BackgroundTask(Task ID, BYOK, Context)
+    note right of API: Non-blocking background handoff
+    
+    API --> UI: 200 OK (Immediate return)
+    deactivate API
+    
+    UI --> User: Render task instantly\n(Chronological deadline sort)
+    deactivate UI
+    
+    == Asynchronous LLM Evaluation ==
+    
+    activate Worker
+    Worker -> LLM: Prompt with task context & deadline
+    activate LLM
+    
+    alt Groq API Success
+        LLM --> Worker: Return JSON {priority: 0-100, rationale}
+        Worker -> DB: UPDATE task (priority score, rationale, status: "triaged")
+        activate DB
+        DB --> Worker: Confirm update
+        deactivate DB
+    else Groq API Failure / Timeout
+        LLM --> Worker: Error response
+        Worker -> DB: UPDATE task (fallback fixed score, status: "error flag")
+        activate DB
+        DB --> Worker: Confirm fallback update
+        deactivate DB
+    end
+    deactivate LLM
+    deactivate Worker
+    
+    == Dynamic UI Update ==
+    
+    UI -> DB: Fetch/Listen for task updates
+    activate UI
+    UI --> User: Dynamically re-sort task list\n(Based on AI priority or fallback)
+    deactivate UI
+end
+
+group User Requested Update
+    User -> UI: Request context update for task
+    activate UI
+    
+    UI -> API: POST /task/{id}/update (new context)
+    activate API
+    
+    API -> DB: FETCH existing task data
+    activate DB
+    DB --> API: Return task data
+    deactivate DB
+    
+    API -> Worker: Trigger BackgroundTask(Task ID, BYOK, updated context)
+    
+    API --> UI: 200 OK
+    deactivate API
+    
+    UI --> User: Show "Updating..." state
+    deactivate UI
+    
+    note right of Worker
+        Worker repeats the Asynchronous LLM Evaluation 
+        and Dynamic UI Update steps above.
+    end note
+end
+
+@enduml
