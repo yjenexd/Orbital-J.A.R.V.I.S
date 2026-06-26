@@ -106,11 +106,22 @@ export function ChatInterface() {
   }
 
   return (
-    <Card sx={{ height: '600px', width: '400px', display: 'flex', flexDirection: 'column' }}>
-      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 3, overflow: 'hidden' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-          <Chat color="primary" />
-          <Typography variant="h6" color="primary">
+    <Card
+      sx={{
+        height: '100%',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        borderRadius: '20px',
+        border: '1px solid #e1e7f2',
+        bgcolor: '#ffffff',
+        boxShadow: '0 20px 42px -32px rgba(43, 62, 103, 0.5)',
+      }}
+    >
+      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2.25, overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.8 }}>
+          <Chat sx={{ color: '#4f66ea', fontSize: 22 }} />
+          <Typography sx={{ color: '#22304f', fontWeight: 700, fontSize: '1rem' }}>
             Chat with your AI Secretary
           </Typography>
         </Box>
@@ -121,8 +132,9 @@ export function ChatInterface() {
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: 1.5,
-            mb: 2,
+            gap: 1.1,
+            mb: 1.6,
+            pr: 0.45,
           }}
         >
           {messages.map((message, index) => (
@@ -134,23 +146,29 @@ export function ChatInterface() {
               }}
             >
               <Paper
-                elevation={1}
+                elevation={0}
                 sx={{
-                  maxWidth: '80%',
-                  p: 1.5,
-                  bgcolor: message.role === 'user' ? 'primary.main' : 'grey.100',
-                  color: message.role === 'user' ? 'primary.contrastText' : 'text.primary',
+                  maxWidth: '86%',
+                  p: 1.2,
+                  borderRadius: message.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                  bgcolor: message.role === 'user' ? '#5a6df0' : '#f4f7ff',
+                  color: message.role === 'user' ? '#ffffff' : '#2e3c5a',
+                  border: message.role === 'user' ? 'none' : '1px solid #e1e8f5',
                 }}
               >
-                <Typography variant="body2">{message.content}</Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                  {message.content}
+                </Typography>
               </Paper>
             </Box>
           ))}
 
           {isTyping && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <Paper elevation={1}>
-                <Typography variant="body2">J².A.R.V.I.S is typing...</Typography>
+              <Paper elevation={0} sx={{ p: 1.2, borderRadius: '14px 14px 14px 4px', bgcolor: '#f4f7ff', border: '1px solid #e1e8f5' }}>
+                <Typography variant="body2" sx={{ color: '#63718d' }}>
+                  J².A.R.V.I.S is typing...
+                </Typography>
               </Paper>
             </Box>
           )}
@@ -169,14 +187,27 @@ export function ChatInterface() {
             disabled={isTyping}
             multiline
             maxRows={4}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '12px',
+                bgcolor: '#f9fbff',
+                '& fieldset': { borderColor: '#d9e2f3' },
+                '&:hover fieldset': { borderColor: '#c8d4ea' },
+                '&.Mui-focused fieldset': { borderColor: '#7083f4' },
+              },
+            }}
           />
 
           <IconButton
-            color="primary"
-            sx={{ bgcolor: 'primary.main', color: 'white', '&:hover': { bgcolor: 'primary.dark' } }}
+            sx={{
+              bgcolor: '#5a6df0',
+              color: 'white',
+              borderRadius: '12px',
+              '&:hover': { bgcolor: '#4458dd' },
+            }}
             onClick={handleSendAction}
           >
-            <Send />
+            <Send sx={{ fontSize: 20 }} />
           </IconButton>
         </Box>
       </CardContent>

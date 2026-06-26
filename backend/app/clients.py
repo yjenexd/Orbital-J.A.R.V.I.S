@@ -13,10 +13,10 @@ from app.config import SUPABASE_KEY, SUPABASE_URL
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-def get_google_calendar_service():
+def get_google_calendar_service(refresh_token: str):
     creds = Credentials(
         token=None,
-        refresh_token=os.getenv("GOOGLE_REFRESH_TOKEN"),
+        refresh_token=refresh_token,
         client_id=os.getenv("GOOGLE_CLIENT_ID"),
         client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
         token_uri="https://oauth2.googleapis.com/token",

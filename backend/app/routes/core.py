@@ -48,7 +48,18 @@ def get_schedule():
 @router.get("/calendar")
 def get_calendar(time_min: str | None = Query(default=None), time_max: str | None = Query(default=None)):
     try:
-        service = get_google_calendar_service()
+        user_row = (
+            supabase.table("users")
+            .select("google_refresh_token")
+            .eq("id", USER_ID)
+            .single()
+            .execute()
+            .data
+        )
+        refresh_token = user_row.get("google_refresh_token") if user_row else None
+        if not refresh_token:
+            raise HTTPException(status_code=401, detail="Google account not connected.")
+        service = get_google_calendar_service(refresh_token)
 
         if not time_min:
             month_start = CURR_DATE.replace(day=1).isoformat() + "T00:00:00+08:00"
