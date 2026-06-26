@@ -6,7 +6,9 @@ from openai import APIError, AsyncOpenAI
 from app.chat.tool_definitions import TOOLS
 from app.chat.tool_handlers import execute_tool_call
 from app.clients import get_google_calendar_service, get_groq_client, supabase
-from app.config import CURR_DATE, SYSTEM_PROMPT
+from datetime import date
+
+from app.config import SYSTEM_PROMPT
 from app.schemas import ChatRequest
 
 
@@ -50,13 +52,6 @@ async def execute_chat(
             .execute()
         )
 
-        active_events = (
-            supabase.table("schedule")
-            .select("event_id, date, time, event, protected")
-            .eq("user_id", user_id)
-            .execute()
-        )
-
         user_row = (
             supabase.table("users")
             .select("name, google_refresh_token")
@@ -68,22 +63,47 @@ async def execute_chat(
         user_name = user_row.get("name", "Unknown")
 
         gcal_service = None
+        active_events_data = []
         google_refresh_token = user_row.get("google_refresh_token")
         if google_refresh_token:
             try:
                 gcal_service = get_google_calendar_service(google_refresh_token)
                 print("[GCAL] Service ready.")
+                today = date.today()
+                time_min = today.isoformat() + "T00:00:00+08:00"
+                if today.month == 12:
+                    time_max = today.replace(year=today.year + 1, month=1, day=1).isoformat() + "T00:00:00+08:00"
+                else:
+                    time_max = today.replace(month=today.month + 1, day=1).isoformat() + "T00:00:00+08:00"
+                gcal_result = gcal_service.events().list(
+                    calendarId="primary",
+                    maxResults=50,
+                    singleEvents=True,
+                    orderBy="startTime",
+                    timeMin=time_min,
+                    timeMax=time_max,
+                ).execute()
+                for event in gcal_result.get("items", []):
+                    start_event = event.get("start", {})
+                    extended = event.get("extendedProperties", {}).get("private", {})
+                    active_events_data.append({
+                        "event_id": event["id"],
+                        "event": event.get("summary", ""),
+                        "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
+                        "time": start_event.get("dateTime", "T00:00:00")[11:19],
+                        "protected": extended.get("protected", "false") == "true",
+                    })
             except Exception as e:
-                print(f"[GCAL] Failed to build service: {e}")
+                print(f"[GCAL] Failed to build service or fetch events: {e}")
         else:
             print("[GCAL] No refresh token found for user — GCal sync disabled.")
 
         db_context = f"""
         LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
         Pending Tasks: {active_tasks.data}
-        Calendar Events: {active_events.data}
+        Calendar Events: {active_events_data}
         User's Name: {user_name}
-        Current Date: {CURR_DATE.isoformat()}
+        Current Date: {date.today().isoformat()}
         """
 
         messages_payload = [{"role": "system", "content": SYSTEM_PROMPT + db_context}] + [

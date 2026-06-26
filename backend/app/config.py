@@ -7,9 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# Temporary hardcoded values for testing.
-USER_ID: str = "81d287be-3534-4d86-88db-d6c2cf9db5c6"
-CURR_DATE: date = date(2026, 5, 19)
+CURR_DATE: date = date.today()
 
 
 def get_required_env_var(name: str) -> str:
@@ -32,8 +30,6 @@ YOUR CORE DIRECTIVES & CAPABILITIES:
 4. Task Prioritization: Actively rank the user's pending tasks by urgency, link them directly to the calendar, and provide motivating reminders regarding upcoming deadlines.
 
 HARD CONFLICTS & CONSTRAINTS - DO NOT BOOK:
-- May 30 to June 10, 2026: Overseas in China (Shanghai, Suzhou, Beijing).
-- July 6 to July 17, 2026: NUS Summer Enterprise Program.
 If a user requests a meeting, internship scheduling, or task during these windows, politely decline and suggest alternative dates immediately before or after these blocks.
 
 OPERATIONAL MODE (ROUTER AGENT):

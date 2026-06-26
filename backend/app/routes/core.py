@@ -1,19 +1,20 @@
-from fastapi import APIRouter, HTTPException, Query
+from datetime import date
 
-from app.clients import get_google_calendar_service, supabase
-from app.config import CURR_DATE, USER_ID
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.clients import get_current_user_id, get_google_calendar_service, supabase
 
 router = APIRouter()
 
 
+
 @router.get("/tasks")
-def get_tasks():
+def get_tasks(user_id: str = Depends(get_current_user_id)):
     try:
         data = (
             supabase.table("tasks")
             .select("task_id, title, priority, priority_score, triage_rationale, source, deadline, completed")
-            .eq("user_id", USER_ID)
+            .eq("user_id", user_id)
             .order("completed", desc=False)
             .order("priority_score", desc=True)
             .order("deadline", desc=False)
@@ -27,31 +28,12 @@ def get_tasks():
 
 
 @router.get("/schedule")
-def get_schedule():
-    try:
-        data = (
-            supabase.table("schedule")
-            .select("event_id, date, time, event, protected")
-            .eq("user_id", USER_ID)
-            .eq("date", CURR_DATE.isoformat())
-            .order("date", desc=False)
-            .order("time", desc=False)
-            .execute()
-            .data
-        )
-        return {"schedule": data}
-    except Exception as e:
-        print(f"Schedule Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/calendar")
-def get_calendar(time_min: str | None = Query(default=None), time_max: str | None = Query(default=None)):
+def get_schedule(user_id: str = Depends(get_current_user_id)):
     try:
         user_row = (
             supabase.table("users")
             .select("google_refresh_token")
-            .eq("id", USER_ID)
+            .eq("id", user_id)
             .single()
             .execute()
             .data
@@ -59,17 +41,75 @@ def get_calendar(time_min: str | None = Query(default=None), time_max: str | Non
         refresh_token = user_row.get("google_refresh_token") if user_row else None
         if not refresh_token:
             raise HTTPException(status_code=401, detail="Google account not connected.")
+
+        service = get_google_calendar_service(refresh_token)
+        today = date.today().isoformat()
+        result = (
+            service.events()
+            .list(
+                calendarId="primary",
+                maxResults=50,
+                singleEvents=True,
+                orderBy="startTime",
+                timeMin=f"{today}T00:00:00+08:00",
+                timeMax=f"{today}T23:59:59+08:00",
+            )
+            .execute()
+        )
+
+        events = []
+        for event in result.get("items", []):
+            start_event = event.get("start", {})
+            extended = event.get("extendedProperties", {}).get("private", {})
+            events.append(
+                {
+                    "event_id": event["id"],
+                    "event": event.get("summary", ""),
+                    "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
+                    "time": start_event.get("dateTime", "T00:00:00")[11:19],
+                    "protected": extended.get("protected", "false") == "true",
+                }
+            )
+
+        return {"schedule": events}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Schedule Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/calendar")
+def get_calendar(
+    user_id: str = Depends(get_current_user_id),
+    time_min: str | None = Query(default=None),
+    time_max: str | None = Query(default=None),
+):
+    try:
+        user_row = (
+            supabase.table("users")
+            .select("google_refresh_token")
+            .eq("id", user_id)
+            .single()
+            .execute()
+            .data
+        )
+        refresh_token = user_row.get("google_refresh_token") if user_row else None
+        if not refresh_token:
+            raise HTTPException(status_code=401, detail="Google account not connected.")
+
         service = get_google_calendar_service(refresh_token)
 
         if not time_min:
-            month_start = CURR_DATE.replace(day=1).isoformat() + "T00:00:00+08:00"
-            if CURR_DATE.month == 12:
+            today = date.today()
+            month_start = today.replace(day=1).isoformat() + "T00:00:00+08:00"
+            if today.month == 12:
                 month_end = (
-                    CURR_DATE.replace(year=CURR_DATE.year + 1, month=1, day=1).isoformat()
+                    today.replace(year=today.year + 1, month=1, day=1).isoformat()
                     + "T00:00:00+08:00"
                 )
             else:
-                month_end = CURR_DATE.replace(month=CURR_DATE.month + 1, day=1).isoformat() + "T00:00:00+08:00"
+                month_end = today.replace(month=today.month + 1, day=1).isoformat() + "T00:00:00+08:00"
         else:
             month_start = time_min
             month_end = time_max
@@ -102,6 +142,8 @@ def get_calendar(time_min: str | None = Query(default=None), time_max: str | Non
             )
 
         return {"schedule": events}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Google Calendar Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

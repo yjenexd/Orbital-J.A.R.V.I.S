@@ -53,7 +53,11 @@ export function DailyBriefing() {
     if (!session) return
     const fetchBriefing: () => Promise<void> = async () => {
       try {
-        const data = await fetchWithGroqKey<BriefingResponse>('/api/briefing')
+        const data = await fetchWithGroqKey<BriefingResponse>('/api/briefing', {
+          headers: { 
+            Authorization: `Bearer ${session.access_token}` 
+          }
+        })
         setBriefing(data.briefing)
         setHasEvents(data.has_events)
       } catch (error: string | any) {

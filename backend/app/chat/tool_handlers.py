@@ -187,84 +187,55 @@ def execute_tool_call(
         return json.dumps({"status": "success", "message": "Task deleted successfully."})
 
     if function_name == "add_schedule_event":
-        res = supabase.table("schedule").insert(
-            {
-                "user_id": user_id,
-                "date": function_args.get("date"),
-                "time": function_args.get("time"),
-                "event": function_args.get("event_title"),
+        if not gcal_service:
+            return json.dumps({"status": "error", "message": "Google Calendar is not connected. Please link your Google account."})
+
+        try:
+            date_val = function_args.get("date")
+            time_val = function_args.get("time")[:5]
+            event_title = function_args.get("event_title")
+            end_date, end_time = _gcal_end_datetime(date_val, time_val)
+
+            gcal_event = {
+                "summary": event_title,
+                "start": {"dateTime": f"{date_val}T{time_val}:00+08:00"},
+                "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
             }
-        ).execute()
+            gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
+        except Exception as e:
+            print(f"[GCAL ERROR] add_schedule_event: {e}")
+            return json.dumps({"status": "error", "message": f"Failed to add event: {str(e)}"})
 
-        if gcal_service and res.data:
-            try:
-                new_event = res.data[0]
-                event_id = new_event["event_id"]
-                date = new_event["date"]
-                time = new_event["time"][:5]
-                event_title = new_event["event"]
-                end_date, end_time = _gcal_end_datetime(date, time)
-
-                gcal_event = {
-                    "summary": event_title,
-                    "description": f"Event ID: {event_id}\nDate: {date}\nTime: {time}",
-                    "start": {"dateTime": f"{date}T{time}:00+08:00"},
-                    "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
-                    "extendedProperties": {"private": {"supabase_event_id": str(event_id)}},
-                }
-                created = gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
-                supabase.table("schedule").update({"gcal_event_id": created["id"]}).eq("event_id", event_id).execute()
-            except Exception as e:
-                print(f"[GCAL ERROR] add_schedule_event: {e}")
-
-        return json.dumps({"status": "success", "message": "Event added successfully."})
+        return json.dumps({"status": "success", "message": "Event added to Google Calendar successfully."})
 
     if function_name == "update_schedule_event":
-        event_id_int = int(function_args["event_id"])
+        gcal_event_id = str(function_args["event_id"])
 
-        event_res = (
-            supabase.table("schedule")
-            .select("date, time, event, gcal_event_id")
-            .eq("event_id", event_id_int)
-            .eq("user_id", user_id)
-            .execute()
-        )
+        if not gcal_service:
+            return json.dumps({"status": "error", "message": "Google Calendar is not connected."})
 
-        update_payload = {}
-        if "date" in function_args:
-            update_payload["date"] = function_args["date"]
-        if "time" in function_args:
-            update_payload["time"] = function_args["time"]
-        if "event_title" in function_args:
-            update_payload["event"] = function_args["event_title"]
+        try:
+            current = gcal_service.events().get(calendarId="primary", eventId=gcal_event_id).execute()
+            current_start = current.get("start", {})
+            current_date = current_start.get("dateTime", current_start.get("date", ""))[:10]
+            current_time = current_start.get("dateTime", "T00:00")[11:16]
 
-        supabase.table("schedule").update(update_payload).eq("event_id", event_id_int).eq(
-            "user_id", user_id
-        ).execute()
+            date_val = function_args.get("date", current_date)
+            time_val = function_args.get("time", current_time)[:5]
+            event_title = function_args.get("event_title", current.get("summary", ""))
+            end_date, end_time = _gcal_end_datetime(date_val, time_val)
 
-        if gcal_service and event_res.data:
-            try:
-                current = event_res.data[0]
-                gcal_event_id = current.get("gcal_event_id")
-                if gcal_event_id:
-                    date = function_args.get("date", current["date"])
-                    time = function_args.get("time", current["time"])[:5]
-                    event_title = function_args.get("event_title", current["event"])
-                    end_date, end_time = _gcal_end_datetime(date, time)
+            patch_body = {
+                "summary": event_title,
+                "start": {"dateTime": f"{date_val}T{time_val}:00+08:00"},
+                "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
+            }
+            gcal_service.events().patch(calendarId="primary", eventId=gcal_event_id, body=patch_body).execute()
+        except Exception as e:
+            print(f"[GCAL ERROR] update_schedule_event: {e}")
+            return json.dumps({"status": "error", "message": f"Failed to update event: {str(e)}"})
 
-                    patch_body = {
-                        "summary": event_title,
-                        "description": f"Event ID: {event_id_int}\nDate: {date}\nTime: {time}",
-                        "start": {"dateTime": f"{date}T{time}:00+08:00"},
-                        "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
-                    }
-                    gcal_service.events().patch(
-                        calendarId="primary", eventId=gcal_event_id, body=patch_body
-                    ).execute()
-            except Exception as e:
-                print(f"[GCAL ERROR] update_schedule_event: {e}")
-
-        return json.dumps({"status": "success", "message": "Event updated successfully."})
+        return json.dumps({"status": "success", "message": "Event updated in Google Calendar successfully."})
 
     if function_name == "delete_schedule_event":
         if not function_args.get("user_confirmed"):
@@ -275,39 +246,17 @@ def execute_tool_call(
                 }
             )
 
-        event_id_int = int(function_args["event_id"])
+        gcal_event_id = str(function_args["event_id"])
 
-        gcal_event_id = None
-        if gcal_service:
-            try:
-                event_res = (
-                    supabase.table("schedule")
-                    .select("gcal_event_id")
-                    .eq("event_id", event_id_int)
-                    .eq("user_id", user_id)
-                    .execute()
-                )
-                if event_res.data:
-                    gcal_event_id = event_res.data[0].get("gcal_event_id")
-            except Exception as e:
-                print(f"[GCAL ERROR] delete_schedule_event fetch: {e}")
+        if not gcal_service:
+            return json.dumps({"status": "error", "message": "Google Calendar is not connected."})
 
-        res = (
-            supabase.table("schedule")
-            .delete()
-            .eq("event_id", event_id_int)
-            .eq("user_id", user_id)
-            .execute()
-        )
-        if len(res.data) == 0:
-            return json.dumps({"status": "error", "message": "Deletion failed. No event found with that exact ID."})
+        try:
+            gcal_service.events().delete(calendarId="primary", eventId=gcal_event_id).execute()
+        except Exception as e:
+            print(f"[GCAL ERROR] delete_schedule_event: {e}")
+            return json.dumps({"status": "error", "message": f"Failed to delete event: {str(e)}"})
 
-        if gcal_service and gcal_event_id:
-            try:
-                gcal_service.events().delete(calendarId="primary", eventId=gcal_event_id).execute()
-            except Exception as e:
-                print(f"[GCAL ERROR] delete_schedule_event: {e}")
-
-        return json.dumps({"status": "success", "message": "Event deleted successfully."})
+        return json.dumps({"status": "success", "message": "Event deleted from Google Calendar successfully."})
 
     return function_response

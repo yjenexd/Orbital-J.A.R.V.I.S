@@ -4,7 +4,7 @@ export interface User {
 }
 
 export interface CalendarEvent {
-    event_id: number;
+    event_id: string;
     date: string;
     time: string;
     event: string;
