@@ -1,3 +1,5 @@
+import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from openai import AsyncOpenAI
 
@@ -12,7 +14,7 @@ router = APIRouter()
 async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client)):
     try:
         current_user_id = USER_ID
-        sample_date = "2026-05-19"
+        sample_date = datetime.date.today().isoformat()
 
         schedule_res = (
             supabase.table("schedule")

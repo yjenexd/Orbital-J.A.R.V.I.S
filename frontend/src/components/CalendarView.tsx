@@ -76,9 +76,7 @@ export function CalendarView() {
       <FullCalendar
         plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
-        initialDate="2026-05-19"
-        now="2026-05-19"
-        headerToolbar={{
+headerToolbar={{
           left: 'prev,next today',
           center: 'title',
           right: 'dayGridMonth,timeGridWeek,timeGridDay',
