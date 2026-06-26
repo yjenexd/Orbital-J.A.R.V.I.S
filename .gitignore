@@ -2,12 +2,12 @@
 backend/.env
 backend/venv/
 backend/.venv/
-backend/__pycache__/
-
 # Python (Root)
 venv/
 .venv/
-__pycache__/
+# Python bytecode
+**/__pycache__/
+*.py[cod]
 
 # Node/React (Frontend)
 frontend/.env

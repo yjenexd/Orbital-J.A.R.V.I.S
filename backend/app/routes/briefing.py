@@ -67,7 +67,7 @@ async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client
         """
 
         ai_response = await client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": "You are a proactive AI secretary."},
                 {"role": "user", "content": briefing_prompt},
