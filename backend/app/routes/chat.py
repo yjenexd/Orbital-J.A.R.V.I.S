@@ -15,6 +15,46 @@ from app.schemas import ChatRequest
 router = APIRouter()
 
 
+def _extract_user_facing_prompt(tool_message: str) -> str:
+    if not tool_message:
+        return "I need a quick clarification before I continue."
+
+    ask_patterns = [
+        r"You MUST reply by asking:\s*'([^']+)'",
+        r"You MUST reply by asking the user:\s*'([^']+)'",
+    ]
+
+    for pattern in ask_patterns:
+        match = re.search(pattern, tool_message)
+        if match:
+            return match.group(1)
+
+    return tool_message
+
+
+def _is_non_action_message(message: str) -> bool:
+    cleaned = re.sub(r"[^a-z0-9\s]", "", (message or "").strip().lower())
+    if not cleaned:
+        return True
+
+    if re.fullmatch(r"test(ing)?(\s+\d+)?", cleaned):
+        return True
+
+    casual_inputs = {
+        "hi",
+        "hello",
+        "hey",
+        "yo",
+        "sup",
+        "ok",
+        "okay",
+        "ping",
+        "test",
+        "testing",
+    }
+    return cleaned in casual_inputs
+
+
 @router.post("/chat")
 async def execute_chat(
     request: ChatRequest,
@@ -55,18 +95,17 @@ async def execute_chat(
             }
         ).execute()
 
-        history_response = (
-            supabase.table("messages")
-            .select("message_id, role, content, created_at")
-            .eq("user_id", user_id)
-            .order("created_at", desc=True)
-            .limit(request.history_limit)
-            .execute()
-        )
-
-        sorted_history = history_response.data[::-1]
-        # Prevent stale assistant phrasing (e.g., old "today" dates) from overriding current date.
-        history_for_model = [msg for msg in sorted_history if msg.get("role") == "user"][-6:]
+        # Guardrail: ignore non-action probes so they cannot trigger state-changing tools.
+        if _is_non_action_message(user_message):
+            ai_reply = "Ready when you are. Tell me what task or event you want to manage."
+            supabase.table("messages").insert(
+                {
+                    "user_id": user_id,
+                    "role": "assistant",
+                    "content": ai_reply,
+                }
+            ).execute()
+            return {"reply": ai_reply}
 
         active_tasks = (
             supabase.table("tasks")
@@ -128,7 +167,7 @@ async def execute_chat(
             except Exception as e:
                 print(f"[GCAL] Failed to build service or fetch events: {e}")
         else:
-            print("[GCAL] No refresh token found for user — GCal sync disabled.")
+            print("[GCAL] No refresh token found for user - GCal sync disabled.")
 
         db_context = f"""
         LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
@@ -139,8 +178,10 @@ async def execute_chat(
         TEMPORAL ANCHOR: Treat {date.today().isoformat()} as the only valid meaning of 'today', 'tonight', and 'this evening' unless the user explicitly provides another date. Ignore any conflicting date references from older conversation history.
         """
 
-        messages_payload = [{"role": "system", "content": SYSTEM_PROMPT + db_context}] + [
-            {"role": msg["role"], "content": msg["content"]} for msg in history_for_model
+        # Stateless intent evaluation: only route using the current message.
+        messages_payload = [
+            {"role": "system", "content": SYSTEM_PROMPT + db_context},
+            {"role": "user", "content": user_message},
         ]
 
         response = await client.chat.completions.create(
@@ -152,49 +193,10 @@ async def execute_chat(
 
         response_message = response.choices[0].message
 
-        tool_errors: list[str] = []
-        if response_message.tool_calls:
-            messages_payload.append(response_message.model_dump(exclude_none=True))
-
-            for tool_call in response_message.tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-                print(f" [AI TOOL CALL] -> {function_name} | Args: {function_args}")
-
-                try:
-                    function_response = execute_tool_call(
-                        function_name,
-                        function_args,
-                        user_id,
-                        user_message=user_message,
-                        background_tasks=background_tasks,
-                        x_groq_api_key=x_groq_api_key,
-                        gcal_service=gcal_service,
-                    )
-                except Exception as db_error:
-                    function_response = json.dumps(
-                        {"status": "error", "message": f"Database operation failed: {str(db_error)}"}
-                    )
-                    print(f"[DB ERROR] -> {str(db_error)}")
-
-                try:
-                    tool_result = json.loads(function_response)
-                    if tool_result.get("status") == "error":
-                        tool_errors.append(tool_result.get("message", "Unknown tool error"))
-                except Exception:
-                    pass
-
-                messages_payload.append(
-                    {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": function_response,
-                    }
-                )
-
-        if tool_errors:
-            ai_reply = f"I couldn't complete that calendar action: {tool_errors[0]}"
+        # Avoid a second model pass when no tool action is needed; this prevents
+        # provider-side tool-choice errors on casual messages.
+        if not response_message.tool_calls:
+            ai_reply = response_message.content or "How can I help you with your schedule or tasks right now?"
             supabase.table("messages").insert(
                 {
                     "user_id": user_id,
@@ -204,18 +206,52 @@ async def execute_chat(
             ).execute()
             return {"reply": ai_reply}
 
-        messages_payload.append(
-            {
-                "role": "user",
-                "content": "CRITICAL INSTRUCTION: Review the tool responses you just received. If any tool returned 'pending_confirmation', 'pending_information', or 'error', you MUST halt and ask the user for what is missing or explain the failure. Under NO circumstances should you hallucinate or claim an action was successful if a tool failed or blocked it.",
-            }
-        )
+        tool_errors: list[str] = []
+        pending_prompt: str | None = None
+        success_messages: list[str] = []
 
-        second_response = await client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=messages_payload,
-        )
-        ai_reply = second_response.choices[0].message.content
+        for tool_call in response_message.tool_calls:
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments)
+            print(f" [AI TOOL CALL] -> {function_name} | Args: {function_args}")
+
+            try:
+                function_response = execute_tool_call(
+                    function_name,
+                    function_args,
+                    user_id,
+                    user_message=user_message,
+                    background_tasks=background_tasks,
+                    x_groq_api_key=x_groq_api_key,
+                    gcal_service=gcal_service,
+                )
+            except Exception as db_error:
+                function_response = json.dumps(
+                    {"status": "error", "message": f"Database operation failed: {str(db_error)}"}
+                )
+                print(f"[DB ERROR] -> {str(db_error)}")
+
+            try:
+                tool_result = json.loads(function_response)
+                status = tool_result.get("status")
+                message = tool_result.get("message", "")
+                if status == "error":
+                    tool_errors.append(message or "Unknown tool error")
+                elif status in {"pending_confirmation", "pending_information"}:
+                    pending_prompt = _extract_user_facing_prompt(message)
+                elif status == "success" and message:
+                    success_messages.append(message)
+            except Exception:
+                pass
+
+        if tool_errors:
+            ai_reply = f"I couldn't complete that action: {tool_errors[0]}"
+        elif pending_prompt:
+            ai_reply = pending_prompt
+        elif success_messages:
+            ai_reply = success_messages[-1]
+        else:
+            ai_reply = "Done."
 
         supabase.table("messages").insert(
             {

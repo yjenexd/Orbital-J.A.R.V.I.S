@@ -81,6 +81,8 @@ export function ChatInterface() {
           created_at: Date.now().toString(),
         },
       ])
+      window.dispatchEvent(new Event('refreshSchedule'))
+
     } catch (error: string | any) {
       console.error('Error communicating with the backend:', error)
 
@@ -112,6 +114,7 @@ export function ChatInterface() {
     <Card
       sx={{
         height: '100%',
+        maxHeight: '1000px',
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -132,6 +135,7 @@ export function ChatInterface() {
         <Box
           sx={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',

@@ -4,11 +4,9 @@ TOOLS = [
         "function": {
             "name": "add_task",
             "description": (
-                f"Add a new pending task to the user's database. Use this when the user that they have a new task to complete, "
-                f"such as an assignment, project, or personal errand. If the user does not specify a priority, default to 'medium'. "
-                f"You should only call this function when the user explicitly states they have a new task to add, or if they provide "
-                f"details about a task that is not already in the database. Do not use this function to update existing tasks; "
-                f"use update_task for that purpose."
+                "TRIGGER: Use ONLY when the user describes a pending to-do item, assignment, or errand that does NOT have a specific required time slot. "
+                "DO NOT use this for meetings, classes, or appointments—use add_schedule_event for those. "
+                "If priority is not stated, default to 'medium'."
             ),
             "parameters": {
                 "type": "object",
@@ -101,10 +99,9 @@ TOOLS = [
         "function": {
             "name": "add_schedule_event",
             "description": (
-                f"Add a new event to the user's calendar. Use this when the user explicitly states they have a new event to add, "
-                f"such as a meeting, class, or personal appointment. "
-                f"If the user does not specify a time, you should ask them for clarification before calling this function, "
-                f"as time is required to create a calendar event."
+                "TRIGGER: Use ONLY when the user explicitly states they have a new time-bound event, meeting, dinner, or class. "
+                "CRITICAL: If the user provides a relative day (e.g., 'tomorrow', 'next Tuesday'), you MUST calculate the correct YYYY-MM-DD based on the Current Date provided in the system prompt. "
+                "If the user does not specify a time, you MUST ask for clarification instead of guessing."
             ),
             "parameters": {
                 "type": "object",
@@ -131,11 +128,9 @@ TOOLS = [
         "function": {
             "name": "update_schedule_event",
             "description": (
-                f"Update an existing calendar event (e.g., rescheduling a meeting or changing its name). "
-                f"If you do not know the event_id, use check_calendar first to find it. Only use this function when you are certain "
-                f"the event already exists and you are modifying its details. "
-                f"If the user is describing a new event that does not exist in the calendar, you should call add_schedule_event "
-                f"instead to create it in Google Calendar."
+                "TRIGGER: Use to shift, reschedule, or rename an existing calendar event. "
+                "CRITICAL: You MUST find the exact 'event_id' from the LIVE DATABASE CONTEXT matching the event the user wants to change. "
+                "Do NOT guess or hallucinate the event_id. If the event does not exist in the provided context, inform the user."
             ),
             "parameters": {
                 "type": "object",

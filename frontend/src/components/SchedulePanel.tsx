@@ -126,10 +126,24 @@ export function SchedulePanel() {
         setEvents([])
       }
     }
-
+    
     fetchSchedule()
-    const interval = setInterval(fetchSchedule, 300000)
-    return () => clearInterval(interval)
+    const interval = setInterval(fetchSchedule, 60000)
+
+    //Refetch when the user tabs back into the app
+    const handleFocus = () => fetchSchedule()
+    window.addEventListener('focus', handleFocus)
+
+    // Refetch when our app manually triggers an update (e.g., from the chat)
+    const handleCustomUpdate = () => fetchSchedule()
+    window.addEventListener('refreshSchedule', handleCustomUpdate)
+
+    // Cleanup all listeners on unmount
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('refreshSchedule', handleCustomUpdate)
+    }
   }, [session])
 
   const conflicts = detectConflicts(events)
