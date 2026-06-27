@@ -15,6 +15,7 @@ import {
   Stack,
   LinearProgress,
   Skeleton,
+  Link,
 } from '@mui/material'
 import {
   Email,
@@ -28,9 +29,9 @@ import {
   Cancel,
   HourglassEmpty,
   Logout,
-} from '@mui/icons-material';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabaseClient';
+} from '@mui/icons-material'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 type KeyStatus = 'none' | 'validating' | 'valid' | 'invalid'
 
@@ -44,7 +45,7 @@ type ProfileUser = {
 function StatusChip({ status }: { status: KeyStatus }) {
   if (status === 'none') return null
   const map = {
-    validating: { label: 'Validating…', color: 'default' as const, icon: <HourglassEmpty sx={{ fontSize: 14 }} /> },
+    validating: { label: 'Validating...', color: 'default' as const, icon: <HourglassEmpty sx={{ fontSize: 14 }} /> },
     valid: { label: 'Valid key', color: 'success' as const, icon: <CheckCircle sx={{ fontSize: 14 }} /> },
     invalid: { label: 'Invalid key', color: 'error' as const, icon: <Cancel sx={{ fontSize: 14 }} /> },
   }
@@ -62,7 +63,7 @@ function avatarInitials(name: string) {
 }
 
 export default function ProfilePage() {
-  const { session, loading } = useAuth();
+  const { session, loading } = useAuth()
   const user: ProfileUser | null = session?.user
     ? {
         name: session.user.user_metadata?.full_name ?? session.user.email ?? 'User',
@@ -70,7 +71,7 @@ export default function ProfilePage() {
         avatarUrl: session.user.user_metadata?.avatar_url,
         raw: { hd: session.user.user_metadata?.hd },
       }
-    : null;
+    : null
 
   const [groqKey, setGroqKey] = useState(() => localStorage.getItem('groq_api_key') ?? '')
   const [showKey, setShowKey] = useState(false)
@@ -79,8 +80,10 @@ export default function ProfilePage() {
   const [copied, setCopied] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
 
+  const hasSavedGroqKey = Boolean(localStorage.getItem('groq_api_key')?.trim())
+
   const maskedKey =
-    groqKey.length > 8 ? groqKey.slice(0, 4) + '••••••••' + groqKey.slice(-4) : groqKey
+    groqKey.length > 8 ? groqKey.slice(0, 4) + '........' + groqKey.slice(-4) : groqKey
 
   const handleValidate = () => {
     if (!groqKey.trim() || !groqKey.startsWith('gsk_')) {
@@ -223,12 +226,49 @@ export default function ProfilePage() {
             Your key is stored only in this browser and never sent to any server. It powers AI features via Groq.
           </Typography>
 
+          {!hasSavedGroqKey && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="info" sx={{ mb: 1.6 }}>
+                No Groq API key detected yet. Follow the setup steps below before using chat and briefing features.
+              </Alert>
+              <Typography sx={{ fontWeight: 700, color: '#22304f', mb: 1 }}>
+                How to Generate and Connect Your Groq API Key
+              </Typography>
+              <Box component="ol" sx={{ pl: 2.5, m: 0, color: '#425170' }}>
+                <li>
+                  <Typography variant="body2" sx={{ mb: 0.8 }}>
+                    Create or log in to your Groq account at{' '}
+                    <Link href="https://console.groq.com/" target="_blank" rel="noopener noreferrer">
+                      Groq Console
+                    </Link>
+                    . Use Google or email sign-up, and verify your email if prompted.
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2" sx={{ mb: 0.8 }}>
+                    Open the API Keys tab from the left sidebar, click Create API Key, enter a memorable label like "My App BYOK", and create the key.
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2" sx={{ mb: 0.8 }}>
+                    Copy the key immediately and store it safely. Groq only shows the full key once.
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2">
+                    Paste the key into the BYOK field below, validate, then click Save Key to connect it to this app.
+                  </Typography>
+                </li>
+              </Box>
+            </Box>
+          )}
+
           {keyStatus === 'validating' && <LinearProgress sx={{ mb: 2, borderRadius: 1, bgcolor: '#eaf0ff' }} />}
 
           <TextField
             fullWidth
             label="Groq API Key"
-            placeholder="gsk_••••••••••••••••••••••••••••••••"
+            placeholder="gsk_................................"
             value={showKey ? groqKey : groqKey ? maskedKey : ''}
             onChange={(e) => {
               setGroqKey(e.target.value)
@@ -325,7 +365,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Logout */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button
           variant="outlined"
