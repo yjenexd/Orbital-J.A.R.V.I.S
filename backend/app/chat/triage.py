@@ -24,18 +24,20 @@ async def triage_task_background(
     )
 
     triage_prompt = f"""
-    You are J.A.R.V.I.S's task triage engine. Evaluate the following task and return a JSON object evaluating its priority
+    You are J.A.R.V.I.S's background task triage engine. Evaluate this task and output a JSON object scoring its priority.
 
     Task Title: {title}
     Deadline: {deadline}
     Current Date: {CURR_DATE.isoformat()}
     User Update Notes: '{user_context if user_context else "None"}'
 
-    Evaluate based on a university student's lifestyle, academic workload, and personal commitments. Consider the urgency of the deadline, the typical time required for such a task, and how it fits into the user's overall schedule.:
-    - Due within 48 hours: high priority (score 80-100)
-    - Due within 3-7 days: medium priority (score 50-79)
-    - Due in more than 7 days or minor errand: low priority (score 0-49)
-    - if the user tells you it is important, adjust the score upwards by 10-20 points, but do not exceed 100.
+    EVALUATION CRITERIA:
+    Assess this based on a rigorous Computer Science workload. 
+    - CRITICAL (Score 90-100): Overdue items, Orbital project deployments, major CS assignments, or Secondary 4 national exam prep due within 48 hours.
+    - HIGH (Score 75-89): Standard assignments or important errands due within 3 days.
+    - MEDIUM (Score 50-74): Routine maintenance (e.g., aquarium water changes, general studying) due within 4-7 days.
+    - LOW (Score 10-49): Distant deadlines (>7 days), minor personal errands, or hobby-related tasks.
+    * Adjust upwards by 15 points if the user notes explicitly state it is important, capping at 100.
 
     Return EXACTLY this JSON format and nothing else:
     {{

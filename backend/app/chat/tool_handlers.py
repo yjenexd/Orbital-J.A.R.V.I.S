@@ -9,6 +9,25 @@ from app.clients import supabase
 from app.config import CURR_DATE
 
 
+BLACKOUT_START = datetime(2026, 7, 6).date()
+BLACKOUT_END = datetime(2026, 7, 17).date()
+
+
+def _is_blackout_date(date_str: str) -> bool:
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    return BLACKOUT_START <= target_date <= BLACKOUT_END
+
+
+def _blackout_message() -> str:
+    return (
+        "Scheduling is blocked during the Summer Enterprise Programme blackout window "
+        "(2026-07-06 to 2026-07-17). Please pick a slot on 2026-07-05 or from 2026-07-18 onward."
+    )
+
+
 def _gcal_end_datetime(date: str, time: str) -> tuple[str, str]:
     start_dt = datetime.strptime(f"{date}T{time[:5]}", "%Y-%m-%dT%H:%M")
     end_dt = start_dt + timedelta(hours=1)
@@ -102,6 +121,7 @@ def execute_tool_call(
             supabase.table("tasks")
             .select("title, deadline, gcal_event_id")
             .eq("task_id", task_id_int)
+            .eq("user_id", user_id)
             .execute()
         )
 
@@ -143,10 +163,26 @@ def execute_tool_call(
 
     if function_name == "delete_task":
         if not function_args.get("user_confirmed"):
+            task_id_val = function_args.get("task_id")
+            task_name = "this task"
+            if task_id_val is not None:
+                lookup = (
+                    supabase.table("tasks")
+                    .select("title")
+                    .eq("task_id", int(task_id_val))
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                if lookup.data:
+                    task_name = lookup.data[0].get("title") or task_name
+
             return json.dumps(
                 {
                     "status": "pending_confirmation",
-                    "message": "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. You MUST reply by asking the user: 'Are you sure you want to delete this task?'",
+                    "message": (
+                        "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. "
+                        f"You MUST reply by asking the user: 'Are you sure you want to delete {task_name}?'"
+                    ),
                 }
             )
 
@@ -192,6 +228,9 @@ def execute_tool_call(
 
         try:
             date_val = function_args.get("date")
+            if _is_blackout_date(date_val):
+                return json.dumps({"status": "error", "message": _blackout_message()})
+
             time_val = function_args.get("time")[:5]
             event_title = function_args.get("event_title")
             end_date, end_time = _gcal_end_datetime(date_val, time_val)
@@ -221,6 +260,9 @@ def execute_tool_call(
             current_time = current_start.get("dateTime", "T00:00")[11:16]
 
             date_val = function_args.get("date", current_date)
+            if _is_blackout_date(date_val):
+                return json.dumps({"status": "error", "message": _blackout_message()})
+
             time_val = function_args.get("time", current_time)[:5]
             event_title = function_args.get("event_title", current.get("summary", ""))
             end_date, end_time = _gcal_end_datetime(date_val, time_val)
@@ -239,10 +281,33 @@ def execute_tool_call(
 
     if function_name == "delete_schedule_event":
         if not function_args.get("user_confirmed"):
+            event_id = str(function_args["event_id"])
+            event_name = "this event"
+            event_date = "unknown date"
+            event_time = "unknown time"
+            if gcal_service:
+                try:
+                    current = gcal_service.events().get(calendarId="primary", eventId=event_id).execute()
+                    start_event = current.get("start", {})
+                    start_value = start_event.get("dateTime", start_event.get("date", ""))
+                    if start_value:
+                        event_date = start_value[:10]
+                        if "T" in start_value:
+                            event_time = start_value[11:16]
+                        else:
+                            event_time = "00:00"
+                    event_name = current.get("summary", event_name)
+                except Exception as e:
+                    print(f"[GCAL ERROR] delete_schedule_event lookup: {e}")
+
             return json.dumps(
                 {
                     "status": "pending_confirmation",
-                    "message": "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. You MUST reply by asking the user: 'Are you sure you want to cancel this event?'",
+                    "message": (
+                        "SYSTEM OVERRIDE: Deletion blocked. DO NOT tell the user it was deleted. "
+                        "You MUST reply by asking the user: "
+                        f"'Are you sure you want to cancel {event_name} on {event_date} at {event_time}?'"
+                    ),
                 }
             )
 
