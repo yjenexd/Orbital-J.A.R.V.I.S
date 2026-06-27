@@ -1,7 +1,7 @@
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material'
 import { CalendarMonth, Warning, Shield } from '@mui/icons-material'
 import { useEffect, useState } from 'react'
-import { API_URL, fetchWithGroqKey } from '../api'
+import { fetchWithGroqKey } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 
 
