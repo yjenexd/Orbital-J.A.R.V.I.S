@@ -1,11 +1,13 @@
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material'
 import { CalendarMonth, Warning, Shield } from '@mui/icons-material'
 import { useEffect, useState } from 'react'
-import { API_URL } from '../api'
+import { fetchWithGroqKey } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 
+
+
 interface ScheduleEvent {
-  event_id: number
+  event_id: string
   date: string
   time: string
   event: string
@@ -20,8 +22,8 @@ type EventTheme = {
   timeColor: string
 }
 
-function detectConflicts(events: ScheduleEvent[]): Set<number> {
-  const grouped = new Map<string, number[]>()
+function detectConflicts(events: ScheduleEvent[]): Set<string> {
+  const grouped = new Map<string, string[]>()
 
   for (const event of events) {
     const key = `${event.date}T${event.time}`
@@ -35,7 +37,7 @@ function detectConflicts(events: ScheduleEvent[]): Set<number> {
     ids.push(event.event_id)
   }
 
-  const conflicts = new Set<number>()
+  const conflicts = new Set<string>()
   for (const ids of grouped.values()) {
     if (ids.length > 1) ids.forEach((id) => conflicts.add(id))
   }
@@ -98,33 +100,35 @@ export function SchedulePanel() {
 
   useEffect(() => {
     if (!session) return
-    const fetchSchedule = () => {
-      fetch(`${API_URL}/schedule`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`)
-          return r.json()
-        })
-        .then((data) => {
-          if (!data.schedule || !Array.isArray(data.schedule)) {
-            console.error('Invalid schedule data:', data)
-            setEvents([])
-            return
-          }
 
-          const today = new Date().toISOString().slice(0, 10)
-          const filtered = data.schedule.filter((e: ScheduleEvent) => e.date === today)
-          setEvents(filtered)
+    const fetchSchedule = async () => {
+      try {
+        const data = await fetchWithGroqKey<{ schedule: ScheduleEvent[] }>('/schedule', {
+          headers: { 
+            Authorization: `Bearer ${session.access_token}`,
+            // Pass the Google credentials to your FastAPI backend
+            'X-Provider-Token': session.provider_token || '',
+            'X-Provider-Refresh-Token': session.provider_refresh_token || ''
+          },
         })
-        .catch((err) => {
-          console.error('Failed to fetch schedule:', err)
+
+        if (!data.schedule || !Array.isArray(data.schedule)) {
+          console.error('Invalid schedule data:', data)
           setEvents([])
-        })
+          return
+        }
+
+        const today = new Date().toLocaleDateString('en-CA')
+        const filtered = data.schedule.filter((e: ScheduleEvent) => e.date === today)
+        setEvents(filtered)
+      } catch (err) {
+        console.error('Failed to fetch schedule:', err)
+        setEvents([])
+      }
     }
 
     fetchSchedule()
-    const interval = setInterval(fetchSchedule, 5000)
+    const interval = setInterval(fetchSchedule, 300000)
     return () => clearInterval(interval)
   }, [session])
 

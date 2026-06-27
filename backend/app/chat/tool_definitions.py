@@ -135,14 +135,14 @@ TOOLS = [
                 f"If you do not know the event_id, use check_calendar first to find it. Only use this function when you are certain "
                 f"the event already exists and you are modifying its details. "
                 f"If the user is describing a new event that does not exist in the calendar, you should call add_schedule_event "
-                f"instead to create it in the database."
+                f"instead to create it in Google Calendar."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "event_id": {
-                        "type": "integer",
-                        "description": "The unique ID of the event to update.",
+                        "type": "string",
+                        "description": "The Google Calendar event ID of the event to update.",
                     },
                     "date": {
                         "type": "string",
@@ -176,8 +176,8 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "event_id": {
-                        "type": "integer",
-                        "description": "The unique ID of the event to delete.",
+                        "type": "string",
+                        "description": "The Google Calendar event ID of the event to delete.",
                     },
                     "user_confirmed": {
                         "type": "boolean",

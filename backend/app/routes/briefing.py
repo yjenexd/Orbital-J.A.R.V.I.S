@@ -3,44 +3,67 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from openai import AsyncOpenAI
 
-from app.clients import get_groq_client, supabase
-from app.config import USER_ID
-
+from app.clients import get_current_user_id, get_google_calendar_service, get_groq_client, supabase
 
 router = APIRouter()
 
 
 @router.get("/api/briefing")
-async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client)):
+async def day_at_a_glance_briefing(
+    client: AsyncOpenAI = Depends(get_groq_client),
+    user_id: str = Depends(get_current_user_id),
+):
     try:
-        current_user_id = USER_ID
         sample_date = datetime.date.today().isoformat()
 
-        schedule_res = (
-            supabase.table("schedule")
-            .select("event_id, date, time, event, protected, users(name)")
-            .eq("date", sample_date)
-            .eq("user_id", current_user_id)
-            .execute()
-        )
+        # Fetch today's schedule from Google Calendar
+        schedule_data = []
+        try:
+            user_row = (
+                supabase.table("users")
+                .select("name, google_refresh_token")
+                .eq("id", user_id)
+                .single()
+                .execute()
+                .data
+            )
+            refresh_token = user_row.get("google_refresh_token") if user_row else None
+            if refresh_token:
+                gcal_service = get_google_calendar_service(refresh_token)
+                gcal_result = gcal_service.events().list(
+                    calendarId="primary",
+                    maxResults=20,
+                    singleEvents=True,
+                    orderBy="startTime",
+                    timeMin=f"{sample_date}T00:00:00+08:00",
+                    timeMax=f"{sample_date}T23:59:59+08:00",
+                ).execute()
+                for event in gcal_result.get("items", []):
+                    start_event = event.get("start", {})
+                    schedule_data.append({
+                        "event": event.get("summary", ""),
+                        "time": start_event.get("dateTime", "T00:00:00")[11:16],
+                    })
+        except Exception as e:
+            print(f"[BRIEFING] GCal fetch failed: {e}")
 
         tasks_res = (
             supabase.table("tasks")
             .select("task_id, title, priority, deadline, source")
             .eq("completed", False)
-            .eq("user_id", current_user_id)
+            .eq("user_id", user_id)
             .execute()
         )
 
         email_res = (
             supabase.table("email")
             .select("email_id, sender, subject, summary, urgency")
-            .eq("user_id", current_user_id)
+            .eq("user_id", user_id)
             .limit(5)
             .execute()
         )
 
-        if not schedule_res.data and not tasks_res.data and not email_res.data:
+        if not schedule_data and not tasks_res.data and not email_res.data:
             return {
                 "briefing": "You have no scheduled events, pending tasks, or urgent emails for today. Enjoy your day!",
                 "has_events": False,
@@ -50,7 +73,7 @@ async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client
         You are the user's elite, highly competent, and warm executive assistant. You speak in a natural, human voice-highly organized, proactive, and empathetic.
 
         DATA STRUCTURE GUIDE:
-        - `Schedule`: Contains 'event' (description), 'time', and a relational 'users' array (who they are meeting with). 'protected' means it cannot be moved.
+        - `Schedule`: Contains 'event' (description) and 'time'. 'protected' means it cannot be moved.
         - `Tasks`: Contains 'title', 'deadline', and 'priority'.
         - `Emails`: Contains recent inbox items with pre-generated summaries and 'urgency' levels.
 
@@ -63,13 +86,13 @@ async def day_at_a_glance_briefing(client: AsyncOpenAI = Depends(get_groq_client
         4. Start directly with the briefing (do not use generic AI greetings like "Good morning" or "Here is your summary").
 
         LIVE DATABASE PAYLOAD:
-        Schedule: {schedule_res.data}
+        Schedule: {schedule_data}
         Pending Tasks: {tasks_res.data}
         Emails: {email_res.data}
         """
 
         ai_response = await client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": "You are a proactive AI secretary."},
                 {"role": "user", "content": briefing_prompt},

@@ -99,7 +99,16 @@ def test_get_calendar_maps_google_event_fields(client, monkeypatch):
             }
         ]
     }
-    monkeypatch.setattr(core_routes, "get_google_calendar_service", lambda: FakeCalendarService(payload))
+    monkeypatch.setattr(
+        core_routes,
+        "supabase",
+        FakeSupabase({"users": [{"google_refresh_token": "fake-refresh"}]}),
+    )
+    monkeypatch.setattr(
+        core_routes,
+        "get_google_calendar_service",
+        lambda _refresh_token: FakeCalendarService(payload),
+    )
 
     response = client.get("/calendar")
 

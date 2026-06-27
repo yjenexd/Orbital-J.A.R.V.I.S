@@ -39,3 +39,15 @@ async def get_groq_client(
         yield client
     finally:
         await client.close()
+
+
+def get_current_user_id(authorization: str | None = Header(default=None)) -> str:
+    from fastapi import HTTPException
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    token = authorization.removeprefix("Bearer ")
+    try:
+        result = supabase.auth.get_user(token)
+        return result.user.id
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")

@@ -10,6 +10,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.app_factory import app
+from app.clients import get_current_user_id
 
 
 @pytest.fixture
@@ -21,5 +22,6 @@ def client():
 @pytest.fixture(autouse=True)
 def clear_dependency_overrides():
     app.dependency_overrides.clear()
+    app.dependency_overrides[get_current_user_id] = lambda: "test-user-id"
     yield
     app.dependency_overrides.clear()

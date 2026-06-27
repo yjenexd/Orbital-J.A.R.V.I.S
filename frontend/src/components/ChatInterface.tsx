@@ -23,7 +23,9 @@ export function ChatInterface() {
 
     const loadChatHistory = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/chat/history?user_id=${encodeURIComponent(userId)}`)
+        const response = await fetch(`${API_URL}/api/chat/history`, {
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        })
         if (!response.ok) {
           throw new Error('Failed to fetch history')
         }
@@ -65,6 +67,7 @@ export function ChatInterface() {
     try {
       const data = await fetchWithGroqKey<{ reply: string }>('/chat', {
         method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ user_id: userId, message: trimmedInput }),
       })
 

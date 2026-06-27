@@ -9,6 +9,7 @@ class FakeTable:
     def __init__(self, rows):
         self._rows = rows
         self._limit = None
+        self._single = False
 
     def select(self, *_args, **_kwargs):
         return self
@@ -20,10 +21,16 @@ class FakeTable:
         self._limit = value
         return self
 
+    def single(self):
+        self._single = True
+        return self
+
     def execute(self):
         data = self._rows
         if self._limit is not None:
             data = data[: self._limit]
+        if self._single:
+            data = data[0] if data else {}
         return SimpleNamespace(data=data)
 
 
@@ -33,6 +40,25 @@ class FakeSupabase:
 
     def table(self, name):
         return FakeTable(self._table_rows.get(name, []))
+
+
+class FakeEventsService:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def list(self, **_kwargs):
+        return self
+
+    def execute(self):
+        return self._payload
+
+
+class FakeCalendarService:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def events(self):
+        return FakeEventsService(self._payload)
 
 
 class FakeChatCompletions:
@@ -58,7 +84,7 @@ def test_briefing_returns_empty_summary_without_data(client, monkeypatch):
     monkeypatch.setattr(
         briefing_routes,
         "supabase",
-        FakeSupabase({"schedule": [], "tasks": [], "email": []}),
+        FakeSupabase({"users": [{"google_refresh_token": None}], "tasks": [], "email": []}),
     )
     app.dependency_overrides[get_groq_client] = _override_groq_client
 
@@ -76,10 +102,17 @@ def test_briefing_uses_llm_when_data_exists(client, monkeypatch):
         "supabase",
         FakeSupabase(
             {
-                "schedule": [{"event": "Demo", "time": "10:00:00"}],
+                "users": [{"google_refresh_token": "fake-refresh"}],
                 "tasks": [{"title": "Finalize slides", "priority": "high"}],
                 "email": [{"subject": "Urgent feedback", "urgency": "high"}],
             }
+        ),
+    )
+    monkeypatch.setattr(
+        briefing_routes,
+        "get_google_calendar_service",
+        lambda _refresh_token: FakeCalendarService(
+            {"items": [{"summary": "Demo", "start": {"dateTime": "2026-06-26T10:00:00+08:00"}}]}
         ),
     )
     app.dependency_overrides[get_groq_client] = _override_groq_client

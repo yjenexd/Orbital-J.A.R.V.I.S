@@ -1,12 +1,14 @@
 import json
+from datetime import date
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from openai import APIError, AsyncOpenAI
 
 from app.chat.tool_definitions import TOOLS
 from app.chat.tool_handlers import execute_tool_call
-from app.clients import get_google_calendar_service, get_groq_client, supabase
-from app.config import CURR_DATE, SYSTEM_PROMPT
+from app.clients import get_current_user_id, get_google_calendar_service, get_groq_client, supabase
+from app.config import SYSTEM_PROMPT
 from app.schemas import ChatRequest
 
 
@@ -18,10 +20,31 @@ async def execute_chat(
     request: ChatRequest,
     background_tasks: BackgroundTasks,
     client: AsyncOpenAI = Depends(get_groq_client),
+    authenticated_user_id: str = Depends(get_current_user_id),
     x_groq_api_key: str | None = Header(default=None),
 ):
-    user_id = request.user_id
+    # Always trust the authenticated identity, not the client payload.
+    user_id = authenticated_user_id
     user_message = request.message
+
+    # Deterministic date/time answers prevent model drift from stale context.
+    normalized_message = (user_message or "").strip().lower()
+    if re.fullmatch(r"(what\s+is\s+)?(the\s+)?date(\s+today)?\??", normalized_message) or normalized_message in {
+        "what is the date today",
+        "what's the date today",
+        "today's date",
+        "date today",
+    }:
+        today_str = date.today().isoformat()
+        ai_reply = f"Today's date is {today_str}."
+        supabase.table("messages").insert(
+            {
+                "user_id": user_id,
+                "role": "assistant",
+                "content": ai_reply,
+            }
+        ).execute()
+        return {"reply": ai_reply}
 
     try:
         supabase.table("messages").insert(
@@ -42,17 +65,12 @@ async def execute_chat(
         )
 
         sorted_history = history_response.data[::-1]
+        # Prevent stale assistant phrasing (e.g., old "today" dates) from overriding current date.
+        history_for_model = [msg for msg in sorted_history if msg.get("role") == "user"][-6:]
 
         active_tasks = (
             supabase.table("tasks")
             .select("task_id, title, priority, deadline, completed")
-            .eq("user_id", user_id)
-            .execute()
-        )
-
-        active_events = (
-            supabase.table("schedule")
-            .select("event_id, date, time, event, protected")
             .eq("user_id", user_id)
             .execute()
         )
@@ -68,26 +86,61 @@ async def execute_chat(
         user_name = user_row.get("name", "Unknown")
 
         gcal_service = None
+        active_events_data = []
         google_refresh_token = user_row.get("google_refresh_token")
         if google_refresh_token:
             try:
                 gcal_service = get_google_calendar_service(google_refresh_token)
                 print("[GCAL] Service ready.")
+                today = date.today()
+                time_min = today.isoformat() + "T00:00:00+08:00"
+                if today.month == 12:
+                    time_max = (
+                        today.replace(year=today.year + 1, month=1, day=1).isoformat()
+                        + "T00:00:00+08:00"
+                    )
+                else:
+                    time_max = today.replace(month=today.month + 1, day=1).isoformat() + "T00:00:00+08:00"
+                gcal_result = (
+                    gcal_service.events()
+                    .list(
+                        calendarId="primary",
+                        maxResults=50,
+                        singleEvents=True,
+                        orderBy="startTime",
+                        timeMin=time_min,
+                        timeMax=time_max,
+                    )
+                    .execute()
+                )
+                for event in gcal_result.get("items", []):
+                    start_event = event.get("start", {})
+                    extended = event.get("extendedProperties", {}).get("private", {})
+                    active_events_data.append(
+                        {
+                            "event_id": event["id"],
+                            "event": event.get("summary", ""),
+                            "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
+                            "time": start_event.get("dateTime", "T00:00:00")[11:19],
+                            "protected": extended.get("protected", "false") == "true",
+                        }
+                    )
             except Exception as e:
-                print(f"[GCAL] Failed to build service: {e}")
+                print(f"[GCAL] Failed to build service or fetch events: {e}")
         else:
             print("[GCAL] No refresh token found for user — GCal sync disabled.")
 
         db_context = f"""
         LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
         Pending Tasks: {active_tasks.data}
-        Calendar Events: {active_events.data}
+        Calendar Events: {active_events_data}
         User's Name: {user_name}
-        Current Date: {CURR_DATE.isoformat()}
+        Current Date: {date.today().isoformat()}
+        TEMPORAL ANCHOR: Treat {date.today().isoformat()} as the only valid meaning of 'today', 'tonight', and 'this evening' unless the user explicitly provides another date. Ignore any conflicting date references from older conversation history.
         """
 
         messages_payload = [{"role": "system", "content": SYSTEM_PROMPT + db_context}] + [
-            {"role": msg["role"], "content": msg["content"]} for msg in sorted_history
+            {"role": msg["role"], "content": msg["content"]} for msg in history_for_model
         ]
 
         response = await client.chat.completions.create(
@@ -99,6 +152,7 @@ async def execute_chat(
 
         response_message = response.choices[0].message
 
+        tool_errors: list[str] = []
         if response_message.tool_calls:
             messages_payload.append(response_message.model_dump(exclude_none=True))
 
@@ -123,6 +177,13 @@ async def execute_chat(
                     )
                     print(f"[DB ERROR] -> {str(db_error)}")
 
+                try:
+                    tool_result = json.loads(function_response)
+                    if tool_result.get("status") == "error":
+                        tool_errors.append(tool_result.get("message", "Unknown tool error"))
+                except Exception:
+                    pass
+
                 messages_payload.append(
                     {
                         "tool_call_id": tool_call.id,
@@ -132,10 +193,21 @@ async def execute_chat(
                     }
                 )
 
+        if tool_errors:
+            ai_reply = f"I couldn't complete that calendar action: {tool_errors[0]}"
+            supabase.table("messages").insert(
+                {
+                    "user_id": user_id,
+                    "role": "assistant",
+                    "content": ai_reply,
+                }
+            ).execute()
+            return {"reply": ai_reply}
+
         messages_payload.append(
             {
                 "role": "user",
-                "content": "CRITICAL INSTRUCTION: Review the tool responses you just received. If any tool returned 'pending_confirmation' or 'pending_information', you MUST halt and ask the user for the missing input. Under NO circumstances should you hallucinate or claim an action was successful if the tool response blocked it.",
+                "content": "CRITICAL INSTRUCTION: Review the tool responses you just received. If any tool returned 'pending_confirmation', 'pending_information', or 'error', you MUST halt and ask the user for what is missing or explain the failure. Under NO circumstances should you hallucinate or claim an action was successful if a tool failed or blocked it.",
             }
         )
 
