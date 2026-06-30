@@ -39,7 +39,7 @@ async def triage_task_background(
     - LOW (Score 10-49): Distant deadlines (>7 days), minor personal errands, or hobby-related tasks.
     * Adjust upwards by 15 points if the user notes explicitly state it is important, capping at 100.
 
-    Return EXACTLY this JSON format and nothing else:
+    Return EXACTLY this JSON format and nothing else. priority_level MUST be one of: "low", "medium", "high" — never "CRITICAL":
     {{
         "priority_level": "high",
         "priority_score": 85,
@@ -56,9 +56,13 @@ async def triage_task_background(
 
         ai_data = json.loads(response.choices[0].message.content)
 
+        _level_raw = ai_data.get("priority_level", "medium").lower()
+        _level_map = {"critical": "high", "high": "high", "medium": "medium", "low": "low"}
+        priority_level = _level_map.get(_level_raw, "medium")
+
         supabase.table("tasks").update(
             {
-                "priority": ai_data.get("priority_level", "medium"),
+                "priority": priority_level,
                 "priority_score": ai_data.get("priority_score", 50),
                 "triage_rationale": ai_data.get(
                     "triage_rationale",

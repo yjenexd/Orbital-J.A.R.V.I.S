@@ -87,6 +87,17 @@ async def execute_chat(
         return {"reply": ai_reply}
 
     try:
+        history_result = (
+            supabase.table("messages")
+            .select("role, content")
+            .eq("user_id", user_id)
+            .eq("role", "assistant")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        recent_messages = history_result.data if history_result.data else []
+
         supabase.table("messages").insert(
             {
                 "user_id": user_id,
@@ -178,9 +189,9 @@ async def execute_chat(
         TEMPORAL ANCHOR: Treat {date.today().isoformat()} as the only valid meaning of 'today', 'tonight', and 'this evening' unless the user explicitly provides another date. Ignore any conflicting date references from older conversation history.
         """
 
-        # Stateless intent evaluation: only route using the current message.
         messages_payload = [
             {"role": "system", "content": SYSTEM_PROMPT + db_context},
+            *[{"role": msg["role"], "content": msg["content"]} for msg in recent_messages],
             {"role": "user", "content": user_message},
         ]
 

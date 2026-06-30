@@ -30,50 +30,16 @@ def get_tasks(user_id: str = Depends(get_current_user_id)):
 @router.get("/schedule")
 def get_schedule(user_id: str = Depends(get_current_user_id)):
     try:
-        _result = (
-            supabase.table("users")
-            .select("google_refresh_token")
-            .eq("id", user_id)
-            .maybe_single()
+        data = (
+            supabase.table("schedule")
+            .select("event_id, date, time, event, protected, gcal_event_id")
+            .eq("user_id", user_id)
+            .eq("date", date.today().isoformat())
+            .order("time", desc=False)
             .execute()
+            .data
         )
-        user_row = _result.data if _result else None
-        refresh_token = user_row.get("google_refresh_token") if user_row else None
-        if not refresh_token:
-            raise HTTPException(status_code=401, detail="Google account not connected.")
-
-        service = get_google_calendar_service(refresh_token)
-        today = date.today().isoformat()
-        result = (
-            service.events()
-            .list(
-                calendarId="primary",
-                maxResults=50,
-                singleEvents=True,
-                orderBy="startTime",
-                timeMin=f"{today}T00:00:00+08:00",
-                timeMax=f"{today}T23:59:59+08:00",
-            )
-            .execute()
-        )
-
-        events = []
-        for event in result.get("items", []):
-            start_event = event.get("start", {})
-            extended = event.get("extendedProperties", {}).get("private", {})
-            events.append(
-                {
-                    "event_id": event["id"],
-                    "event": event.get("summary", ""),
-                    "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
-                    "time": start_event.get("dateTime", "T00:00:00")[11:19],
-                    "protected": extended.get("protected", "false") == "true",
-                }
-            )
-
-        return {"schedule": events}
-    except HTTPException:
-        raise
+        return {"schedule": data}
     except Exception as e:
         print(f"Schedule Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

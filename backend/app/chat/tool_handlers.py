@@ -240,7 +240,15 @@ def execute_tool_call(
                 "start": {"dateTime": f"{date_val}T{time_val}:00+08:00"},
                 "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
             }
-            gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
+            created = gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
+            supabase.table("schedule").insert({
+                "user_id": user_id,
+                "event": event_title,
+                "date": date_val,
+                "time": time_val,
+                "protected": False,
+                "gcal_event_id": created["id"],
+            }).execute()
         except Exception as e:
             print(f"[GCAL ERROR] add_schedule_event: {e}")
             return json.dumps({"status": "error", "message": f"Failed to add event: {str(e)}"})
@@ -273,6 +281,11 @@ def execute_tool_call(
                 "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
             }
             gcal_service.events().patch(calendarId="primary", eventId=gcal_event_id, body=patch_body).execute()
+            supabase.table("schedule").update({
+                "event": event_title,
+                "date": date_val,
+                "time": time_val,
+            }).eq("gcal_event_id", gcal_event_id).eq("user_id", user_id).execute()
         except Exception as e:
             print(f"[GCAL ERROR] update_schedule_event: {e}")
             return json.dumps({"status": "error", "message": f"Failed to update event: {str(e)}"})
@@ -318,6 +331,7 @@ def execute_tool_call(
 
         try:
             gcal_service.events().delete(calendarId="primary", eventId=gcal_event_id).execute()
+            supabase.table("schedule").delete().eq("gcal_event_id", gcal_event_id).eq("user_id", user_id).execute()
         except Exception as e:
             print(f"[GCAL ERROR] delete_schedule_event: {e}")
             return json.dumps({"status": "error", "message": f"Failed to delete event: {str(e)}"})

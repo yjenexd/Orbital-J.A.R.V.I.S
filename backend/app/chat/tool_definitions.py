@@ -4,8 +4,10 @@ TOOLS = [
         "function": {
             "name": "add_task",
             "description": (
-                "TRIGGER: Use ONLY when the user describes a pending to-do item, assignment, or errand that does NOT have a specific required time slot. "
-                "DO NOT use this for meetings, classes, or appointments—use add_schedule_event for those. "
+                "TRIGGER: Use for any pending to-do item, assignment, homework, or errand. "
+                "CRITICAL: Assignments and homework ALWAYS go here, even if the user states a specific due time (e.g. 'due at 9pm'). "
+                "DO NOT also call add_schedule_event for assignments or homework — they are tasks, not calendar events. "
+                "DO NOT use this for meetings, classes, dinners, or social appointments — use add_schedule_event for those. "
                 "If priority is not stated, default to 'medium'."
             ),
             "parameters": {
@@ -99,7 +101,9 @@ TOOLS = [
         "function": {
             "name": "add_schedule_event",
             "description": (
-                "TRIGGER: Use ONLY when the user explicitly states they have a new time-bound event, meeting, dinner, or class. "
+                "TRIGGER: Use ONLY when the user explicitly requests to schedule, add, or book an event (e.g., 'schedule a meeting', 'add gym to my calendar', 'book a dinner'). "
+                "DO NOT use just because the user mentions having something at a time (e.g., 'I have a class at 2pm' is informational — not a scheduling command). "
+                "DO NOT use for assignments, homework, or coursework — those are tasks, use add_task instead. "
                 "CRITICAL: If the user provides a relative day (e.g., 'tomorrow', 'next Tuesday'), you MUST calculate the correct YYYY-MM-DD based on the Current Date provided in the system prompt. "
                 "If the user does not specify a time, you MUST ask for clarification instead of guessing."
             ),

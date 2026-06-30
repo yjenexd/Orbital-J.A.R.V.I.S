@@ -19,14 +19,14 @@ async def day_at_a_glance_briefing(
         # Fetch today's schedule from Google Calendar
         schedule_data = []
         try:
-            user_row = (
+            _result = (
                 supabase.table("users")
                 .select("name, google_refresh_token")
                 .eq("id", user_id)
-                .single()
+                .maybe_single()
                 .execute()
-                .data
             )
+            user_row = _result.data if _result else None
             refresh_token = user_row.get("google_refresh_token") if user_row else None
             if refresh_token:
                 gcal_service = get_google_calendar_service(refresh_token)
