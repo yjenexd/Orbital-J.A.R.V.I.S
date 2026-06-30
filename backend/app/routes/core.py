@@ -30,14 +30,14 @@ def get_tasks(user_id: str = Depends(get_current_user_id)):
 @router.get("/schedule")
 def get_schedule(user_id: str = Depends(get_current_user_id)):
     try:
-        user_row = (
+        _result = (
             supabase.table("users")
             .select("google_refresh_token")
             .eq("id", user_id)
             .maybe_single()
             .execute()
-            .data
         )
+        user_row = _result.data if _result else None
         refresh_token = user_row.get("google_refresh_token") if user_row else None
         if not refresh_token:
             raise HTTPException(status_code=401, detail="Google account not connected.")
@@ -86,14 +86,14 @@ def get_calendar(
     time_max: str | None = Query(default=None),
 ):
     try:
-        user_row = (
+        _result = (
             supabase.table("users")
             .select("google_refresh_token")
             .eq("id", user_id)
             .maybe_single()
             .execute()
-            .data
         )
+        user_row = _result.data if _result else None
         refresh_token = user_row.get("google_refresh_token") if user_row else None
         if not refresh_token:
             raise HTTPException(status_code=401, detail="Google account not connected.")

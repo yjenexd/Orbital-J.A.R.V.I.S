@@ -114,14 +114,14 @@ async def execute_chat(
             .execute()
         )
 
-        user_row = (
+        _result = (
             supabase.table("users")
             .select("name, google_refresh_token")
             .eq("id", user_id)
             .maybe_single()
             .execute()
-            .data
         )
+        user_row = _result.data if _result else None
         user_name = user_row.get("name", "Unknown") if user_row else "Unknown"
 
         gcal_service = None
