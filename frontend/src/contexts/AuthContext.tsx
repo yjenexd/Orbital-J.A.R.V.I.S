@@ -21,14 +21,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session)
-      if (event === 'SIGNED_IN' && session?.provider_refresh_token) {
-        await supabase
-          .from('users')
-          .upsert({
-            id: session.user.id,
-            name: session.user.user_metadata?.full_name ?? session.user.email ?? '',
-            google_refresh_token: session.provider_refresh_token,
-          }, { onConflict: 'id' })
+      if (event === 'SIGNED_IN') {
+        console.log('[Auth] SIGNED_IN event, provider_refresh_token:', session?.provider_refresh_token ? 'present' : 'null')
+        if (session?.provider_refresh_token) {
+          const { error } = await supabase
+            .from('users')
+            .upsert({
+              id: session.user.id,
+              name: session.user.user_metadata?.full_name ?? session.user.email ?? '',
+              google_refresh_token: session.provider_refresh_token,
+            }, { onConflict: 'id' })
+          console.log('[Auth] upsert result:', error ? error.message : 'success')
+        }
       }
     })
 
