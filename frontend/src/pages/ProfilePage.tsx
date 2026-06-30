@@ -328,7 +328,7 @@ export default function ProfilePage() {
               color="success"
               startIcon={<Check />}
               onClick={handleSave}
-              disabled={!groqKey.trim() || keyStatus === 'validating'}
+              disabled={!groqKey.trim()}
               size="small"
               sx={{ textTransform: 'none', borderRadius: '10px' }}
             >
