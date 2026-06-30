@@ -118,15 +118,15 @@ async def execute_chat(
             supabase.table("users")
             .select("name, google_refresh_token")
             .eq("id", user_id)
-            .single()
+            .maybe_single()
             .execute()
             .data
         )
-        user_name = user_row.get("name", "Unknown")
+        user_name = user_row.get("name", "Unknown") if user_row else "Unknown"
 
         gcal_service = None
         active_events_data = []
-        google_refresh_token = user_row.get("google_refresh_token")
+        google_refresh_token = user_row.get("google_refresh_token") if user_row else None
         if google_refresh_token:
             try:
                 gcal_service = get_google_calendar_service(google_refresh_token)

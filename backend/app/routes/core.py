@@ -34,7 +34,7 @@ def get_schedule(user_id: str = Depends(get_current_user_id)):
             supabase.table("users")
             .select("google_refresh_token")
             .eq("id", user_id)
-            .single()
+            .maybe_single()
             .execute()
             .data
         )
@@ -90,7 +90,7 @@ def get_calendar(
             supabase.table("users")
             .select("google_refresh_token")
             .eq("id", user_id)
-            .single()
+            .maybe_single()
             .execute()
             .data
         )
