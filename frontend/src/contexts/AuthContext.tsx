@@ -24,8 +24,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_IN' && session?.provider_refresh_token) {
         await supabase
           .from('users')
-          .update({ google_refresh_token: session.provider_refresh_token })
-          .eq('id', session.user.id)
+          .upsert({
+            id: session.user.id,
+            name: session.user.user_metadata?.full_name ?? session.user.email ?? '',
+            google_refresh_token: session.provider_refresh_token,
+          }, { onConflict: 'id' })
       }
     })
 
