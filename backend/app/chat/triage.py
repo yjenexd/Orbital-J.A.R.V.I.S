@@ -49,7 +49,7 @@ async def triage_task_background(
 
     try:
         response = await client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": triage_prompt}],
             response_format={"type": "json_object"},
         )

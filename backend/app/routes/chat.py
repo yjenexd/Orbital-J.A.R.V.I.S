@@ -185,7 +185,7 @@ async def execute_chat(
         ]
 
         response = await client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model="llama-3.3-70b-versatile",
             messages=messages_payload,
             tools=TOOLS,
             tool_choice="auto",
