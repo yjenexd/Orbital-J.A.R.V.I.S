@@ -32,7 +32,7 @@ Local development setup guide for the J.a.r.v.i.s React/FastAPI stack. This syst
    - Create a `.env` file in the root of the `backend` folder and add:
      GITHUB_TOKEN=ghp_your_token_here
 
-5. Start the backend server:
+5. Start the backend server
    python main.py
 
 ---
