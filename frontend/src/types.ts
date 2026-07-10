@@ -4,25 +4,27 @@ export interface User {
 }
 
 export interface CalendarEvent {
-    event_id: number;
+    event_id: string;
     date: string;
     time: string;
     event: string;
     protected: boolean;
-    user_id: number;
+    user_id: string;
 }
 
 export type UserSchedule = CalendarEvent[];
 
 export interface Task {
     task_id: number;
-    task: string;
-    origin: string;
+    title: string;
+    source: string;
     deadline: string;
-    status:boolean;
-    user_id: number;
-    priority: number;
+    completed:boolean;
+    user_id: string;
+    priority: string;
     email_id?: number | null;
+    triage_rationale?: string | null;
+    priority_score: number;
 }
 
 export interface Email {
@@ -30,7 +32,7 @@ export interface Email {
     date: string;     // timestamp
     sender: string;
     summary: string;
-    user_id: number;  // int8 (Foreign Key)
+    user_id: string;  // int8 (Foreign Key)
     subject: string;
     urgency: 'low' | 'medium' | 'high'; // Custom email_urgency type
 }
@@ -39,10 +41,10 @@ export interface Email {
  * Represents a single message bubble in the chat interface.
  */
 export interface ChatMessage {
-  /** Unique identifier for the message */  
+  /** Unique identifier for the message */
   message_id: number;
 
-  user_id: number;
+  user_id: string;
   /** The text content of the message */
   content: string;
   /** Identifies whether the message is from the human or the AI */

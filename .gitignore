@@ -1,12 +1,25 @@
 # Python (Backend)
 backend/.env
 backend/venv/
-backend/__pycache__/
+backend/.venv/
+# Python (Root)
+venv/
+.venv/
+# Python bytecode
+**/__pycache__/
+*.py[cod]
 
 # Node/React (Frontend)
+frontend/.env
+frontend/.env.local
 frontend/node_modules/
 frontend/dist/
 
+# Node (Root)
+node_modules/
+dist/
+
 # General IDE/OS files
 .DS_Store
-.vscode/
+.vscode/*
+!.vscode/settings.json
