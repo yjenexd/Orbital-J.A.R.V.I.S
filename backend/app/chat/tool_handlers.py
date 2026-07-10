@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks
 
-from app.chat.triage import triage_task_background
+from app.graph.triage_graph import run_triage_graph as triage_task_background
 from app.clients import supabase
 from app.config import CURR_DATE
 

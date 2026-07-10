@@ -8,6 +8,7 @@ class FakeTable:
         self._rows = rows
         self._limit = None
         self._single = False
+        self._maybe_single = False
 
     def select(self, *_args, **_kwargs):
         return self
@@ -26,12 +27,18 @@ class FakeTable:
         self._single = True
         return self
 
+    def maybe_single(self):
+        self._maybe_single = True
+        return self
+
     def execute(self):
         data = self._rows
         if self._limit is not None:
             data = data[: self._limit]
         if self._single:
             data = data[0] if data else {}
+        elif self._maybe_single:
+            data = data[0] if data else None
         return SimpleNamespace(data=data)
 
 

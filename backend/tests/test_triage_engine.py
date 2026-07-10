@@ -3,7 +3,7 @@ import json
 from datetime import timedelta
 from types import SimpleNamespace
 
-import app.chat.triage as triage
+import app.graph.triage_graph as triage
 from app.config import CURR_DATE
 
 
@@ -79,7 +79,7 @@ def test_triage_prompt_contains_critical_cs_weighting_and_persists_high_score(mo
 
     deadline = (CURR_DATE + timedelta(days=1)).isoformat()
     asyncio.run(
-        triage.triage_task_background(
+        triage.run_triage_graph(
             task_id=1,
             user_id="u1",
             title="Submit CS2040S Assignment",
@@ -115,7 +115,7 @@ def test_triage_prompt_contains_hobby_band_and_persists_medium_score(monkeypatch
     )
 
     asyncio.run(
-        triage.triage_task_background(
+        triage.run_triage_graph(
             task_id=2,
             user_id="u1",
             title="Change the water in my high-tech planted tank",
@@ -129,3 +129,56 @@ def test_triage_prompt_contains_hobby_band_and_persists_medium_score(monkeypatch
     assert "MEDIUM (Score 50-74)" in prompt
     assert fake_supabase.captured_updates[0]["priority"] == "medium"
     assert fake_supabase.captured_updates[0]["priority_score"] == 62
+
+
+class FakeFailingChatCompletions:
+    async def create(self, **_kwargs):
+        raise RuntimeError("Groq unavailable")
+
+
+class FakeFailingAsyncOpenAI:
+    def __init__(self, **_kwargs):
+        self.chat = SimpleNamespace(completions=FakeFailingChatCompletions())
+
+    async def close(self):
+        return None
+
+
+def test_triage_llm_failure_routes_to_fallback_persist(monkeypatch):
+    """The score -> persist_fallback state transition: when the LLM call fails,
+    the graph must still apply neutral standard sorting rather than leaving the
+    task unranked."""
+    fake_supabase = FakeSupabase()
+    monkeypatch.setattr(triage, "supabase", fake_supabase)
+    monkeypatch.setattr(triage, "AsyncOpenAI", lambda **kwargs: FakeFailingAsyncOpenAI(**kwargs))
+
+    asyncio.run(
+        triage.run_triage_graph(
+            task_id=3,
+            user_id="u1",
+            title="Some task",
+            deadline=(CURR_DATE + timedelta(days=2)).isoformat(),
+            x_groq_api_key="test-key",
+        )
+    )
+
+    assert fake_supabase.captured_updates[0]["priority_score"] == 50
+    assert fake_supabase.captured_updates[0]["triage_rationale"] == "Standard sorting applied (AI Triage offline)."
+
+
+def test_triage_missing_api_key_is_a_noop(monkeypatch):
+    """No key -> no LLM call, no DB write (preserved from the pre-graph behavior)."""
+    fake_supabase = FakeSupabase()
+    monkeypatch.setattr(triage, "supabase", fake_supabase)
+
+    asyncio.run(
+        triage.run_triage_graph(
+            task_id=4,
+            user_id="u1",
+            title="Some task",
+            deadline=CURR_DATE.isoformat(),
+            x_groq_api_key="",
+        )
+    )
+
+    assert fake_supabase.captured_updates == []
