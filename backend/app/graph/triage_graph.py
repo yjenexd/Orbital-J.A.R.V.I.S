@@ -100,7 +100,7 @@ def persist_fallback(state: TriageState) -> dict:
             "priority_score": 50,
             "triage_rationale": "Standard sorting applied (AI Triage offline).",
         }
-    ).eq("task_id", state["task_id"]).execute()
+    ).eq("task_id", state["task_id"]).eq("user_id", state["user_id"]).execute()
     return {}
 
 

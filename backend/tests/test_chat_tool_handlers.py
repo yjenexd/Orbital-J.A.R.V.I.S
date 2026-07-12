@@ -160,6 +160,27 @@ def test_update_task_vague_context_is_forwarded_to_background_triage(monkeypatch
     assert kwargs["user_context"] == "it's actually super important"
 
 
+def test_update_task_unknown_id_reports_error_and_skips_triage(monkeypatch):
+    # Task 999 does not exist (and task 42 belongs to a different user), so the
+    # update touches zero rows. It must report an error rather than a false
+    # "updated" success, and must not queue background triage.
+    db = {"tasks": [{"task_id": 42, "user_id": "someone-else", "title": "Not yours"}]}
+    monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
+    background_tasks = FakeBackgroundTasks()
+
+    res = tool_handlers.execute_tool_call(
+        "update_task",
+        {"task_id": 999, "priority": "high"},
+        user_id="u1",
+        background_tasks=background_tasks,
+        x_groq_api_key="test-key",
+    )
+
+    parsed = json.loads(res)
+    assert parsed["status"] == "error"
+    assert background_tasks.calls == []
+
+
 def test_delete_task_pending_confirmation_includes_task_name(monkeypatch):
     db = {"tasks": [{"task_id": 12, "user_id": "u1", "title": "Buy fish food"}]}
     monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
