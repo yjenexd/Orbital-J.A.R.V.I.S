@@ -11,7 +11,9 @@ import { useAuth } from '../contexts/AuthContext'
 interface ScheduleEvent {
   event_id: string
   date: string
-  time: string
+  start_time: string
+  end_date: string
+  end_time: string
   event: string
   protected: boolean
 }
@@ -38,19 +40,14 @@ export function CalendarView() {
           return
         }
 
-        const formatted = data.schedule.map((e: ScheduleEvent) => {
-          const start = `${e.date}T${e.time}`
-          const endDate = new Date(start)
-          endDate.setHours(endDate.getHours() + 1)
-          return {
-            id: String(e.event_id),
-            title: e.event,
-            start,
-            end: endDate.toISOString(),
-            backgroundColor: e.protected ? '#5fb98c' : '#63a6eb',
-            borderColor: e.protected ? '#5fb98c' : '#63a6eb',
-          }
-        })
+        const formatted = data.schedule.map((e: ScheduleEvent) => ({
+          id: String(e.event_id),
+          title: e.event,
+          start: `${e.date}T${e.start_time}`,
+          end: `${e.end_date}T${e.end_time}`,
+          backgroundColor: e.protected ? '#5fb98c' : '#63a6eb',
+          borderColor: e.protected ? '#5fb98c' : '#63a6eb',
+        }))
         setEvents(formatted)
       })
       .catch((error) => {

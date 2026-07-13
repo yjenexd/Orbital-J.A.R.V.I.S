@@ -105,7 +105,8 @@ TOOLS = [
                 "DO NOT use just because the user mentions having something at a time (e.g., 'I have a class at 2pm' is informational — not a scheduling command). "
                 "DO NOT use for assignments, homework, or coursework — those are tasks, use add_task instead. "
                 "CRITICAL: If the user provides a relative day (e.g., 'tomorrow', 'next Tuesday'), you MUST calculate the correct YYYY-MM-DD based on the Current Date provided in the system prompt. "
-                "If the user does not specify a time, you MUST ask for clarification instead of guessing."
+                "If the user does not specify a start or end time, you MUST ask for clarification instead of guessing. "
+                "If the event spans midnight (end_time < start_time), the system will ask for confirmation before saving — do NOT set user_confirmed=true on the first call."
             ),
             "parameters": {
                 "type": "object",
@@ -114,16 +115,24 @@ TOOLS = [
                         "type": "string",
                         "description": "The date of the event in YYYY-MM-DD format.",
                     },
-                    "time": {
+                    "start_time": {
                         "type": "string",
                         "description": "The start time of the event in HH:MM format (24-hour).",
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "The end time of the event in HH:MM format (24-hour).",
                     },
                     "event_title": {
                         "type": "string",
                         "description": "The name or description of the event.",
                     },
+                    "user_confirmed": {
+                        "type": "boolean",
+                        "description": "Only set to true after the user has explicitly confirmed a midnight-spanning event. Always omit or set false on the first call.",
+                    },
                 },
-                "required": ["date", "time", "event_title"],
+                "required": ["date", "start_time", "end_time", "event_title"],
             },
         },
     },
@@ -134,7 +143,8 @@ TOOLS = [
             "description": (
                 "TRIGGER: Use to shift, reschedule, or rename an existing calendar event. "
                 "CRITICAL: You MUST find the exact 'event_id' from the LIVE DATABASE CONTEXT matching the event the user wants to change. "
-                "Do NOT guess or hallucinate the event_id. If the event does not exist in the provided context, inform the user."
+                "Do NOT guess or hallucinate the event_id. If the event does not exist in the provided context, inform the user. "
+                "If the updated times span midnight (end_time < start_time), the system will ask for confirmation — do NOT set user_confirmed=true on the first call."
             ),
             "parameters": {
                 "type": "object",
@@ -147,13 +157,21 @@ TOOLS = [
                         "type": "string",
                         "description": "The new date in YYYY-MM-DD format (only if it is being changed).",
                     },
-                    "time": {
+                    "start_time": {
                         "type": "string",
-                        "description": "The new time in HH:MM format (24-hour) (only if it is being changed).",
+                        "description": "The new start time in HH:MM format (24-hour) (only if it is being changed).",
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "The new end time in HH:MM format (24-hour) (only if it is being changed).",
                     },
                     "event_title": {
                         "type": "string",
                         "description": "The new name or description of the event (only if it is being changed).",
+                    },
+                    "user_confirmed": {
+                        "type": "boolean",
+                        "description": "Only set to true after the user has explicitly confirmed a midnight-spanning event. Always omit or set false on the first call.",
                     },
                 },
                 "required": ["event_id"],

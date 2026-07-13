@@ -204,7 +204,7 @@ def test_add_schedule_event_blackout_window_is_rejected():
 
     res = tool_handlers.execute_tool_call(
         "add_schedule_event",
-        {"date": "2026-07-10", "time": "14:00", "event_title": "Sync with Jason"},
+        {"date": "2026-07-10", "start_time": "14:00", "end_time": "15:00", "event_title": "Sync with Jason"},
         user_id="u1",
         gcal_service=gcal,
     )
@@ -227,7 +227,7 @@ def test_update_schedule_event_blackout_window_is_rejected():
 
     res = tool_handlers.execute_tool_call(
         "update_schedule_event",
-        {"event_id": "evt-2", "date": "2026-07-12", "time": "10:00"},
+        {"event_id": "evt-2", "date": "2026-07-12", "start_time": "10:00"},
         user_id="u1",
         gcal_service=gcal,
     )

@@ -165,13 +165,15 @@ async def execute_chat(
                 )
                 for event in gcal_result.get("items", []):
                     start_event = event.get("start", {})
+                    end_event = event.get("end", {})
                     extended = event.get("extendedProperties", {}).get("private", {})
                     active_events_data.append(
                         {
                             "event_id": event["id"],
                             "event": event.get("summary", ""),
                             "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
-                            "time": start_event.get("dateTime", "T00:00:00")[11:19],
+                            "start_time": start_event.get("dateTime", "T00:00:00")[11:16],
+                            "end_time": end_event.get("dateTime", "T00:00:00")[11:16],
                             "protected": extended.get("protected", "false") == "true",
                         }
                     )
