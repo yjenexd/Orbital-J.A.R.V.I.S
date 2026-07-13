@@ -6,7 +6,8 @@ export interface User {
 export interface CalendarEvent {
     event_id: string;
     date: string;
-    time: string;
+    start_time: string;
+    end_time: string;
     event: string;
     protected: boolean;
     user_id: string;
