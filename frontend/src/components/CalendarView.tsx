@@ -38,19 +38,28 @@ export function CalendarView() {
           return
         }
 
-        const formatted = data.schedule.map((e: ScheduleEvent) => {
-          const start = `${e.date}T${e.time}`
-          const endDate = new Date(start)
-          endDate.setHours(endDate.getHours() + 1)
-          return {
-            id: String(e.event_id),
-            title: e.event,
-            start,
-            end: endDate.toISOString(),
-            backgroundColor: e.protected ? '#5fb98c' : '#63a6eb',
-            borderColor: e.protected ? '#5fb98c' : '#63a6eb',
-          }
-        })
+        const formatted = (data.schedule as ScheduleEvent[])
+          .map((e: ScheduleEvent) => {
+            const start = `${e.date}T${e.time}`
+            const startDate = new Date(start)
+            // Guard against malformed date/time (e.g. a missing time component):
+            // skip the offending event rather than throwing and blanking them all.
+            if (Number.isNaN(startDate.getTime())) {
+              console.warn('Skipping calendar event with invalid date/time:', e)
+              return null
+            }
+            const endDate = new Date(startDate)
+            endDate.setHours(endDate.getHours() + 1)
+            return {
+              id: String(e.event_id),
+              title: e.event,
+              start,
+              end: endDate.toISOString(),
+              backgroundColor: e.protected ? '#5fb98c' : '#63a6eb',
+              borderColor: e.protected ? '#5fb98c' : '#63a6eb',
+            }
+          })
+          .filter((ev) => ev !== null)
         setEvents(formatted)
       })
       .catch((error) => {
