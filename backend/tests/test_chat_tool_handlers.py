@@ -220,6 +220,27 @@ def test_delete_schedule_event_pending_confirmation_includes_event_details():
     assert "15:00" in parsed["message"]
 
 
+def test_add_schedule_event_persists_start_and_end_time(monkeypatch):
+    # start_time/end_time back the overlap/merge-conflict detection feature, so
+    # a successful add must populate them (end_time defaults to +1h). start_time
+    # is NOT NULL in the schema, so a missing value here would fail the insert.
+    db = {"schedule": []}
+    monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
+    gcal = FakeGcalService()
+
+    res = tool_handlers.execute_tool_call(
+        "add_schedule_event",
+        {"date": "2026-07-20", "time": "13:00", "event_title": "Run"},
+        user_id="u1",
+        gcal_service=gcal,
+    )
+
+    assert json.loads(res)["status"] == "success"
+    row = db["schedule"][0]
+    assert row["start_time"] == "13:00"
+    assert row["end_time"] == "14:00"
+
+
 def test_add_schedule_event_blackout_window_is_rejected():
     gcal = FakeGcalService()
 

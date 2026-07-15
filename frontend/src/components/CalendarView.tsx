@@ -40,10 +40,28 @@ export function CalendarView() {
 
         const formatted = (data.schedule as ScheduleEvent[])
           .map((e: ScheduleEvent) => {
+            if (!e.date) {
+              console.warn('Skipping calendar event with no date:', e)
+              return null
+            }
+
+            const color = e.protected ? '#5fb98c' : '#63a6eb'
+
+            // An event with no time (e.g. a deadline) is a valid all-day event.
+            // Render it as such instead of dropping it or forcing it to midnight.
+            if (!e.time) {
+              return {
+                id: String(e.event_id),
+                title: e.event,
+                start: e.date,
+                allDay: true,
+                backgroundColor: color,
+                borderColor: color,
+              }
+            }
+
             const start = `${e.date}T${e.time}`
             const startDate = new Date(start)
-            // Guard against malformed date/time (e.g. a missing time component):
-            // skip the offending event rather than throwing and blanking them all.
             if (Number.isNaN(startDate.getTime())) {
               console.warn('Skipping calendar event with invalid date/time:', e)
               return null
@@ -55,8 +73,8 @@ export function CalendarView() {
               title: e.event,
               start,
               end: endDate.toISOString(),
-              backgroundColor: e.protected ? '#5fb98c' : '#63a6eb',
-              borderColor: e.protected ? '#5fb98c' : '#63a6eb',
+              backgroundColor: color,
+              borderColor: color,
             }
           })
           .filter((ev) => ev !== null)

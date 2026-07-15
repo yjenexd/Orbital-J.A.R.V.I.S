@@ -104,9 +104,9 @@ def get_calendar(
                     "event": event.get("summary", ""),
                     "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
                     # All-day events have `date` but no `dateTime`, so there is no
-                    # time component. Default to "00:00:00" (a full slice yields ""
-                    # for these, which produces an invalid "<date>T" on the client).
-                    "time": (start_event.get("dateTime") or "")[11:19] or "00:00:00",
+                    # time component. Emit an empty time (rather than a fake
+                    # "00:00:00") so the client can render these as all-day events.
+                    "time": (start_event.get("dateTime") or "")[11:19],
                     "protected": extended.get("protected", "false") == "true",
                 }
             )
