@@ -182,7 +182,7 @@ export function ChatInterface() {
           <div ref={messageEndRef} />
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
           <TextField
             fullWidth
             size="small"
