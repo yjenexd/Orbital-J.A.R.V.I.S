@@ -1,0 +1,11 @@
+-- Add the embedding column for RAG over the messages table.
+-- 384 dims = sentence-transformers/all-MiniLM-L6-v2 (served locally via fastembed).
+-- Nullable on purpose: pre-existing rows stay NULL until backfilled
+-- (see backend/scripts/backfill_message_embeddings.py), and match_messages
+-- filters out NULL rows.
+--
+-- No ANN index yet. ivfflat needs a sizeable, ANALYZE'd training set to build
+-- useful clusters; at single-user message volume a plain sequential scan with
+-- `<=>` is both correct and faster. Revisit with HNSW (not ivfflat) if the
+-- table grows into the thousands of rows.
+alter table messages add column if not exists embedding vector(384);

@@ -1,0 +1,8 @@
+[
+  {"query": "did I already log something about feeding the aquarium?", "expected_message_ids": [1, 2]},
+  {"query": "when is my algorithms coursework due?", "expected_message_ids": [3, 4]},
+  {"query": "what did I arrange with Jason for the project?", "expected_message_ids": [5, 6]},
+  {"query": "remind me about the chemistry tutoring prep", "expected_message_ids": [7, 8]},
+  {"query": "what happened to my workout plan for the morning?", "expected_message_ids": [9, 10]},
+  {"query": "anything about my figure collection task?", "expected_message_ids": [11, 12]}
+]

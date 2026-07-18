@@ -1,8 +1,10 @@
-import json
 from types import SimpleNamespace
 
+from langchain_core.messages import AIMessage
+
 import app.chat.tool_handlers as tool_handlers
-import app.routes.chat as chat_routes
+import app.graph.chat_graph as chat_graph
+import app.graph.llm as graph_llm
 from app.app_factory import app
 from app.clients import get_groq_client
 
@@ -14,6 +16,7 @@ class FakeTable:
         self._filters = []
         self._limit = None
         self._single = False
+        self._maybe_single = False
         self._insert_payload = None
 
     def select(self, *_args, **_kwargs):
@@ -32,6 +35,10 @@ class FakeTable:
 
     def single(self):
         self._single = True
+        return self
+
+    def maybe_single(self):
+        self._maybe_single = True
         return self
 
     def insert(self, payload):
@@ -56,6 +63,8 @@ class FakeTable:
             rows = rows[: self._limit]
         if self._single:
             return SimpleNamespace(data=rows[0] if rows else {})
+        if self._maybe_single:
+            return SimpleNamespace(data=rows[0] if rows else None)
         return SimpleNamespace(data=rows)
 
 
@@ -67,43 +76,45 @@ class FakeSupabase:
         return FakeTable(self._db, name)
 
 
-class FakeMessageWithTools:
-    def __init__(self, tool_calls):
-        self.content = None
-        self.tool_calls = tool_calls
+class FakeChatModel:
+    """Minimal stand-in for ChatGroq: just enough of the Runnable surface for the
+    agent node — bind_tools(...) returns self, ainvoke(...) returns a preset
+    AIMessage. Counts calls so a stray second model call is caught."""
 
-
-class FakeChatCompletionsNoSecondCall:
-    def __init__(self, first_message):
-        self.first_message = first_message
+    def __init__(self, ai_message):
+        self._ai_message = ai_message
         self.calls = 0
 
-    async def create(self, **_kwargs):
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, _messages):
         self.calls += 1
         if self.calls > 1:
             raise AssertionError("Second model call should not happen")
-        return SimpleNamespace(choices=[SimpleNamespace(message=self.first_message)])
+        return self._ai_message
 
 
-class FakeChatCompletionsMustNotRun:
+class FakeChatModelMustNotRun:
     def __init__(self):
         self.calls = 0
 
-    async def create(self, **_kwargs):
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, _messages):
         self.calls += 1
         raise AssertionError("Model should not be called for non-action probes")
 
 
-class FakeOpenAIClient:
-    def __init__(self, completions):
-        self.chat = SimpleNamespace(completions=completions)
-
-
-def _set_client_override(completions):
+def _install_model(monkeypatch, model):
+    # The route still depends on get_groq_client for its 401-if-missing-key guard;
+    # override it so tests can post without a real BYOK header.
     async def _override_groq_client():
-        yield FakeOpenAIClient(completions)
+        yield SimpleNamespace()
 
     app.dependency_overrides[get_groq_client] = _override_groq_client
+    monkeypatch.setattr(graph_llm, "get_chat_model", lambda _api_key: model)
 
 
 def test_chat_non_action_probe_is_blocked_before_model_call(client, monkeypatch):
@@ -113,11 +124,11 @@ def test_chat_non_action_probe_is_blocked_before_model_call(client, monkeypatch)
         "users": [{"id": "test-user-id", "name": "Test", "google_refresh_token": None}],
     }
     fake_supabase = FakeSupabase(fake_db)
-    monkeypatch.setattr(chat_routes, "supabase", fake_supabase)
+    monkeypatch.setattr(chat_graph, "supabase", fake_supabase)
     monkeypatch.setattr(tool_handlers, "supabase", fake_supabase)
 
-    completions = FakeChatCompletionsMustNotRun()
-    _set_client_override(completions)
+    model = FakeChatModelMustNotRun()
+    _install_model(monkeypatch, model)
 
     response = client.post(
         "/chat",
@@ -126,7 +137,7 @@ def test_chat_non_action_probe_is_blocked_before_model_call(client, monkeypatch)
 
     assert response.status_code == 200
     assert response.json()["reply"] == "Ready when you are. Tell me what task or event you want to manage."
-    assert completions.calls == 0
+    assert model.calls == 0
 
 
 def test_chat_pending_confirmation_returns_clean_question(client, monkeypatch):
@@ -136,18 +147,21 @@ def test_chat_pending_confirmation_returns_clean_question(client, monkeypatch):
         "users": [{"id": "test-user-id", "name": "Test", "google_refresh_token": None}],
     }
     fake_supabase = FakeSupabase(fake_db)
-    monkeypatch.setattr(chat_routes, "supabase", fake_supabase)
+    monkeypatch.setattr(chat_graph, "supabase", fake_supabase)
     monkeypatch.setattr(tool_handlers, "supabase", fake_supabase)
 
-    delete_call = SimpleNamespace(
-        id="tool-1",
-        function=SimpleNamespace(
-            name="delete_task",
-            arguments=json.dumps({"task_id": 12, "user_confirmed": False}),
-        ),
+    ai_message = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "name": "delete_task",
+                "args": {"task_id": 12, "user_confirmed": False},
+                "id": "tool-1",
+            }
+        ],
     )
-    completions = FakeChatCompletionsNoSecondCall(FakeMessageWithTools([delete_call]))
-    _set_client_override(completions)
+    model = FakeChatModel(ai_message)
+    _install_model(monkeypatch, model)
 
     response = client.post(
         "/chat",
@@ -156,4 +170,4 @@ def test_chat_pending_confirmation_returns_clean_question(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["reply"] == "Are you sure you want to delete Buy fish food?"
-    assert completions.calls == 1
+    assert model.calls == 1

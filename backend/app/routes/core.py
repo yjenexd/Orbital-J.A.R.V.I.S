@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from google.auth.exceptions import RefreshError
 
 from app.clients import get_current_user_id, get_google_calendar_service, supabase
 
@@ -103,9 +104,10 @@ def get_calendar(
                     "event_id": event["id"],
                     "event": event.get("summary", ""),
                     "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
-                    "start_time": start_event.get("dateTime", "T00:00:00")[11:16],
-                    "end_date": end_event.get("dateTime", end_event.get("date", ""))[:10],
-                    "end_time": end_event.get("dateTime", "T00:00:00")[11:16],
+                    # All-day events have `date` but no `dateTime`, so there is no
+                    # time component. Emit an empty time (rather than a fake
+                    # "00:00:00") so the client can render these as all-day events.
+                    "time": (start_event.get("dateTime") or "")[11:19],
                     "protected": extended.get("protected", "false") == "true",
                 }
             )
@@ -113,6 +115,15 @@ def get_calendar(
         return {"schedule": events}
     except HTTPException:
         raise
+    except RefreshError as e:
+        # The stored Google refresh token is expired/revoked (invalid_grant).
+        # This is a reconnect-required condition, not a server fault, so surface
+        # it as a clear 401 instead of an opaque 500 the UI can't act on.
+        print(f"Google Calendar auth expired (reconnect required): {str(e)}")
+        raise HTTPException(
+            status_code=401,
+            detail="Google authorization expired. Please reconnect your Google account.",
+        )
     except Exception as e:
         print(f"Google Calendar Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

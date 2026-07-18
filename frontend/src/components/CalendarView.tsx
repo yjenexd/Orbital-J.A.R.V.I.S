@@ -40,14 +40,46 @@ export function CalendarView() {
           return
         }
 
-        const formatted = data.schedule.map((e: ScheduleEvent) => ({
-          id: String(e.event_id),
-          title: e.event,
-          start: `${e.date}T${e.start_time}`,
-          end: `${e.end_date}T${e.end_time}`,
-          backgroundColor: e.protected ? '#5fb98c' : '#63a6eb',
-          borderColor: e.protected ? '#5fb98c' : '#63a6eb',
-        }))
+        const formatted = (data.schedule as ScheduleEvent[])
+          .map((e: ScheduleEvent) => {
+            if (!e.date) {
+              console.warn('Skipping calendar event with no date:', e)
+              return null
+            }
+
+            const color = e.protected ? '#5fb98c' : '#63a6eb'
+
+            // An event with no time (e.g. a deadline) is a valid all-day event.
+            // Render it as such instead of dropping it or forcing it to midnight.
+            if (!e.time) {
+              return {
+                id: String(e.event_id),
+                title: e.event,
+                start: e.date,
+                allDay: true,
+                backgroundColor: color,
+                borderColor: color,
+              }
+            }
+
+            const start = `${e.date}T${e.time}`
+            const startDate = new Date(start)
+            if (Number.isNaN(startDate.getTime())) {
+              console.warn('Skipping calendar event with invalid date/time:', e)
+              return null
+            }
+            const endDate = new Date(startDate)
+            endDate.setHours(endDate.getHours() + 1)
+            return {
+              id: String(e.event_id),
+              title: e.event,
+              start,
+              end: endDate.toISOString(),
+              backgroundColor: color,
+              borderColor: color,
+            }
+          })
+          .filter((ev) => ev !== null)
         setEvents(formatted)
       })
       .catch((error) => {

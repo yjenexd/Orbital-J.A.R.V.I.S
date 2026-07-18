@@ -59,8 +59,8 @@ Local development setup guide for the J.a.r.v.i.s React/FastAPI stack. This syst
      GOOGLE_CLIENT_SECRET=your_google_client_secret
      GOOGLE_REFRESH_TOKEN=your_google_refresh_token
 
-5. Start the backend server locally:
-   uvicorn main:app --reload
+5. Start the backend server:
+   python main.py
 
 ---
 

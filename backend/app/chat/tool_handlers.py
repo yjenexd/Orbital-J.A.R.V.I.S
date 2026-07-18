@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks
 
-from app.chat.triage import triage_task_background
+from app.graph.triage_graph import run_triage_graph as triage_task_background
 from app.clients import supabase
 from app.config import CURR_DATE
 
@@ -69,36 +69,38 @@ def execute_tool_call(
 
         res = supabase.table("tasks").insert(insert_payload).execute()
 
-        if res.data:
-            new_task = res.data[0]
+        if not res.data:
+            return json.dumps({"status": "error", "message": "Failed to add the task. Please try again."})
 
-            if background_tasks and x_groq_api_key:
-                background_tasks.add_task(
-                    triage_task_background,
-                    task_id=new_task["task_id"],
-                    user_id=user_id,
-                    title=new_task["title"],
-                    deadline=new_task.get("deadline", "none"),
-                    x_groq_api_key=x_groq_api_key,
-                )
+        new_task = res.data[0]
 
-            if gcal_service:
-                try:
-                    task_id = new_task["task_id"]
-                    priority = new_task.get("priority", "medium")
-                    gcal_date = deadline_val if deadline_str != "none" else CURR_DATE.isoformat()
+        if background_tasks and x_groq_api_key:
+            background_tasks.add_task(
+                triage_task_background,
+                task_id=new_task["task_id"],
+                user_id=user_id,
+                title=new_task["title"],
+                deadline=new_task.get("deadline", "none"),
+                x_groq_api_key=x_groq_api_key,
+            )
 
-                    gcal_event = {
-                        "summary": new_task["title"],
-                        "description": f"Task ID: {task_id}\nPriority: {priority}\nDeadline: {deadline_val}",
-                        "start": {"date": gcal_date},
-                        "end": {"date": gcal_date},
-                        "extendedProperties": {"private": {"supabase_task_id": str(task_id)}},
-                    }
-                    created = gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
-                    supabase.table("tasks").update({"gcal_event_id": created["id"]}).eq("task_id", task_id).execute()
-                except Exception as e:
-                    print(f"[GCAL ERROR] add_task: {e}")
+        if gcal_service:
+            try:
+                task_id = new_task["task_id"]
+                priority = new_task.get("priority", "medium")
+                gcal_date = deadline_val if deadline_str != "none" else CURR_DATE.isoformat()
+
+                gcal_event = {
+                    "summary": new_task["title"],
+                    "description": f"Task ID: {task_id}\nPriority: {priority}\nDeadline: {deadline_val}",
+                    "start": {"date": gcal_date},
+                    "end": {"date": gcal_date},
+                    "extendedProperties": {"private": {"supabase_task_id": str(task_id)}},
+                }
+                created = gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
+                supabase.table("tasks").update({"gcal_event_id": created["id"]}).eq("task_id", task_id).execute()
+            except Exception as e:
+                print(f"[GCAL ERROR] add_task: {e}")
 
         return json.dumps({"status": "success", "message": "Task added successfully."})
 
@@ -126,39 +128,41 @@ def execute_tool_call(
             .execute()
         )
 
-        if task_res.data:
-            updated_task = task_res.data[0]
+        if not task_res.data:
+            return json.dumps({"status": "error", "message": "Update failed. No task found with that exact ID."})
 
-            if background_tasks and x_groq_api_key:
-                context = function_args.get("user_context", user_message)
-                background_tasks.add_task(
-                    triage_task_background,
-                    task_id=task_id_int,
-                    user_id=user_id,
-                    title=updated_task["title"],
-                    deadline=updated_task.get("deadline", "none"),
-                    x_groq_api_key=x_groq_api_key,
-                    user_context=context,
-                )
+        updated_task = task_res.data[0]
 
-            if gcal_service:
-                try:
-                    gcal_event_id = updated_task.get("gcal_event_id")
-                    if gcal_event_id:
-                        deadline = updated_task.get("deadline")
-                        priority = function_args.get("priority", "")
-                        patch_body = {
-                            "summary": updated_task["title"],
-                            "description": f"Task ID: {task_id_int}\nPriority: {priority}\nDeadline: {deadline or 'none'}",
-                        }
-                        if deadline:
-                            patch_body["start"] = {"date": deadline}
-                            patch_body["end"] = {"date": deadline}
-                        gcal_service.events().patch(
-                            calendarId="primary", eventId=gcal_event_id, body=patch_body
-                        ).execute()
-                except Exception as e:
-                    print(f"[GCAL ERROR] update_task: {e}")
+        if background_tasks and x_groq_api_key:
+            context = function_args.get("user_context", user_message)
+            background_tasks.add_task(
+                triage_task_background,
+                task_id=task_id_int,
+                user_id=user_id,
+                title=updated_task["title"],
+                deadline=updated_task.get("deadline", "none"),
+                x_groq_api_key=x_groq_api_key,
+                user_context=context,
+            )
+
+        if gcal_service:
+            try:
+                gcal_event_id = updated_task.get("gcal_event_id")
+                if gcal_event_id:
+                    deadline = updated_task.get("deadline")
+                    priority = function_args.get("priority", "")
+                    patch_body = {
+                        "summary": updated_task["title"],
+                        "description": f"Task ID: {task_id_int}\nPriority: {priority}\nDeadline: {deadline or 'none'}",
+                    }
+                    if deadline:
+                        patch_body["start"] = {"date": deadline}
+                        patch_body["end"] = {"date": deadline}
+                    gcal_service.events().patch(
+                        calendarId="primary", eventId=gcal_event_id, body=patch_body
+                    ).execute()
+            except Exception as e:
+                print(f"[GCAL ERROR] update_task: {e}")
 
         return json.dumps({"status": "success", "message": "Task updated and queued for AI re-triage."})
 
@@ -298,8 +302,11 @@ def execute_tool_call(
                 "user_id": user_id,
                 "event": event_title,
                 "date": date_val,
-                "start_time": start_time_val,
-                "end_time": end_time_val,
+                # start_time/end_time back the overlap/merge-conflict detection
+                # feature; `time` is kept for the current schedule readers.
+                "time": time_val,
+                "start_time": time_val,
+                "end_time": end_time,
                 "protected": False,
                 "gcal_event_id": created["id"],
             }).execute()
@@ -365,8 +372,11 @@ def execute_tool_call(
             supabase.table("schedule").update({
                 "event": event_title,
                 "date": date_val,
-                "start_time": start_time_val,
-                "end_time": end_time_val,
+                # Keep start_time/end_time in sync so overlap/merge-conflict
+                # detection sees the updated slot; `time` retained for readers.
+                "time": time_val,
+                "start_time": time_val,
+                "end_time": end_time,
             }).eq("gcal_event_id", gcal_event_id).eq("user_id", user_id).execute()
         except Exception as e:
             print(f"[GCAL ERROR] update_schedule_event: {e}")
