@@ -51,7 +51,7 @@ export function CalendarView() {
 
             // An event with no time (e.g. a deadline) is a valid all-day event.
             // Render it as such instead of dropping it or forcing it to midnight.
-            if (!e.time) {
+            if (!e.start_time) {
               return {
                 id: String(e.event_id),
                 title: e.event,
@@ -62,19 +62,18 @@ export function CalendarView() {
               }
             }
 
-            const start = `${e.date}T${e.time}`
+            const start = `${e.date}T${e.start_time}`
             const startDate = new Date(start)
             if (Number.isNaN(startDate.getTime())) {
               console.warn('Skipping calendar event with invalid date/time:', e)
               return null
             }
-            const endDate = new Date(startDate)
-            endDate.setHours(endDate.getHours() + 1)
+            const end = `${e.end_date}T${e.end_time}`
             return {
               id: String(e.event_id),
               title: e.event,
               start,
-              end: endDate.toISOString(),
+              end,
               backgroundColor: color,
               borderColor: color,
             }
