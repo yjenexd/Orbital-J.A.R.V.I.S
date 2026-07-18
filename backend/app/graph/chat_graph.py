@@ -7,7 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.chat.tool_definitions import TOOLS
 from app.clients import get_google_calendar_service, supabase
-from app.config import SYSTEM_PROMPT
+from app.prompts import CHAT_SYSTEM_PROMPT
 from app.graph import llm
 from app.graph.state import AgentState
 from app.graph.tools_adapter import tools_node
@@ -241,7 +241,7 @@ async def agent(state: AgentState, config: RunnableConfig) -> dict:
     api_key = config.get("configurable", {}).get("groq_api_key")
     model = llm.get_chat_model(api_key).bind_tools(TOOLS)
 
-    system_content = SYSTEM_PROMPT + state.get("db_context", "") + _format_retrieved(
+    system_content = CHAT_SYSTEM_PROMPT + state.get("db_context", "") + _format_retrieved(
         state.get("retrieved_docs", [])
     )
 

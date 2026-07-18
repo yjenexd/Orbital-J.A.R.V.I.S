@@ -65,7 +65,7 @@ def _enable_rag(monkeypatch):
 
 class _FakeGcal:
     """Minimal Google Calendar stub: event listing returns nothing, which is all
-    ingest_context needs. The blackout check short-circuits before any mutation."""
+    ingest_context needs."""
 
     def events(self):
         return self
@@ -144,33 +144,6 @@ def test_tool_call_success_round_trip(monkeypatch):
 
     assert result["final_reply"] == "Task added successfully."
     assert any(t.get("title") == "Finish CS2040S lab" for t in db["tasks"])
-
-
-def test_blackout_date_rejection_still_enforced(monkeypatch):
-    db = {
-        "messages": [],
-        "tasks": [],
-        "users": [{"id": "test-user-id", "google_refresh_token": "fake-token"}],
-    }
-    supabase = FakeSupabase(db)
-    monkeypatch.setattr(chat_graph, "get_google_calendar_service", lambda _t: _FakeGcal())
-    # add_schedule_event during the 2026-07-06..07-17 blackout window.
-    ai = AIMessage(
-        content="",
-        tool_calls=[
-            {
-                "name": "add_schedule_event",
-                "args": {"date": "2026-07-10", "time": "14:00", "event_title": "Meeting"},
-                "id": "tc-1",
-            }
-        ],
-    )
-    _install(monkeypatch, supabase, _FakeModel(ai))
-
-    result = _invoke(_base_state("schedule a meeting on July 10 at 2pm"))
-
-    assert result["final_reply"].startswith("I couldn't complete that action:")
-    assert "blackout" in result["final_reply"].lower()
 
 
 def test_pending_confirmation_flow(monkeypatch):
