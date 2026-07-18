@@ -124,4 +124,46 @@ def test_get_calendar_maps_google_event_fields(client, monkeypatch):
     assert schedule[0]["event_id"] == "evt-1"
     assert schedule[0]["date"] == "2026-06-22"
     assert schedule[0]["start_time"] == "09:30"
+    assert schedule[0]["end_time"] == ""
     assert schedule[0]["protected"] is True
+
+
+def test_get_schedule_returns_start_and_end_time_fields(client, monkeypatch):
+    monkeypatch.setattr(
+        core_routes,
+        "supabase",
+        FakeSupabase(
+            {
+                "schedule": [
+                    {
+                        "event_id": "s1",
+                        "date": "2026-07-18",
+                        "start_time": "09:00",
+                        "end_time": "10:00",
+                        "event": "Morning run",
+                        "protected": False,
+                        "gcal_event_id": "gc-1",
+                    },
+                    {
+                        "event_id": "s2",
+                        "date": "2026-07-18",
+                        "start_time": "14:00",
+                        "end_time": "15:30",
+                        "event": "Team sync",
+                        "protected": False,
+                        "gcal_event_id": "gc-2",
+                    },
+                ]
+            }
+        ),
+    )
+
+    response = client.get("/schedule")
+
+    assert response.status_code == 200
+    schedule = response.json()["schedule"]
+    assert len(schedule) == 2
+    assert schedule[0]["start_time"] == "09:00"
+    assert schedule[0]["end_time"] == "10:00"
+    assert schedule[1]["start_time"] == "14:00"
+    assert schedule[1]["end_time"] == "15:30"

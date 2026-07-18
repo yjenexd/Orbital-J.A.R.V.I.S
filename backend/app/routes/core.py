@@ -99,15 +99,16 @@ def get_calendar(
             start_event = event.get("start", {})
             end_event = event.get("end", {})
             extended = event.get("extendedProperties", {}).get("private", {})
+            start_dt = start_event.get("dateTime") or ""
+            end_dt = end_event.get("dateTime") or ""
             events.append(
                 {
                     "event_id": event["id"],
                     "event": event.get("summary", ""),
                     "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
-                    # All-day events have `date` but no `dateTime`, so there is no
-                    # time component. Emit an empty time (rather than a fake
-                    # "00:00:00") so the client can render these as all-day events.
-                    "time": (start_event.get("dateTime") or "")[11:19],
+                    "start_time": start_dt[11:16] if start_dt else "",
+                    "end_date": end_dt[:10] if end_dt else "",
+                    "end_time": end_dt[11:16] if end_dt else "",
                     "protected": extended.get("protected", "false") == "true",
                 }
             )

@@ -1,3 +1,5 @@
+import pytest
+
 from app.chat.tool_definitions import TOOLS
 from app.config import SYSTEM_PROMPT
 
@@ -16,6 +18,7 @@ def test_system_prompt_enforces_no_data_dump_and_no_markdown_tables():
     assert "NEVER use Markdown tables" in SYSTEM_PROMPT
 
 
+@pytest.mark.skip(reason="Blackout window removed from system prompt; infrastructure preserved for future use")
 def test_system_prompt_contains_blackout_window_constraint():
     assert "Blackout Period" in SYSTEM_PROMPT
     assert "July 6, 2026 to July 17, 2026" in SYSTEM_PROMPT
