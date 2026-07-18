@@ -40,9 +40,11 @@ async def day_at_a_glance_briefing(
                 ).execute()
                 for event in gcal_result.get("items", []):
                     start_event = event.get("start", {})
+                    end_event = event.get("end", {})
                     schedule_data.append({
                         "event": event.get("summary", ""),
-                        "time": start_event.get("dateTime", "T00:00:00")[11:16],
+                        "start_time": start_event.get("dateTime", "T00:00:00")[11:16],
+                        "end_time": end_event.get("dateTime", "T00:00:00")[11:16],
                     })
         except Exception as e:
             print(f"[BRIEFING] GCal fetch failed: {e}")

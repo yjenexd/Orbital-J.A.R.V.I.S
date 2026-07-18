@@ -33,10 +33,10 @@ def get_schedule(user_id: str = Depends(get_current_user_id)):
     try:
         data = (
             supabase.table("schedule")
-            .select("event_id, date, time, event, protected, gcal_event_id")
+            .select("event_id, date, start_time, end_time, event, protected, gcal_event_id")
             .eq("user_id", user_id)
             .eq("date", date.today().isoformat())
-            .order("time", desc=False)
+            .order("start_time", desc=False)
             .execute()
             .data
         )
@@ -97,6 +97,7 @@ def get_calendar(
         events = []
         for event in result.get("items", []):
             start_event = event.get("start", {})
+            end_event = event.get("end", {})
             extended = event.get("extendedProperties", {}).get("private", {})
             events.append(
                 {

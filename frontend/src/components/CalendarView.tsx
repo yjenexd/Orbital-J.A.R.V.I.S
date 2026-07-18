@@ -11,7 +11,9 @@ import { useAuth } from '../contexts/AuthContext'
 interface ScheduleEvent {
   event_id: string
   date: string
-  time: string
+  start_time: string
+  end_date: string
+  end_time: string
   event: string
   protected: boolean
 }

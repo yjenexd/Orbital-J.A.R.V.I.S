@@ -123,5 +123,5 @@ def test_get_calendar_maps_google_event_fields(client, monkeypatch):
     schedule = response.json()["schedule"]
     assert schedule[0]["event_id"] == "evt-1"
     assert schedule[0]["date"] == "2026-06-22"
-    assert schedule[0]["time"] == "09:30:00"
+    assert schedule[0]["start_time"] == "09:30"
     assert schedule[0]["protected"] is True

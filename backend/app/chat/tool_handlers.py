@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, time as time_type, timedelta
 from typing import Any
 
 from fastapi import BackgroundTasks
@@ -9,11 +9,13 @@ from app.clients import supabase
 from app.config import CURR_DATE
 
 
-BLACKOUT_START = datetime(2026, 7, 6).date()
-BLACKOUT_END = datetime(2026, 7, 17).date()
+BLACKOUT_START = None
+BLACKOUT_END = None
 
 
 def _is_blackout_date(date_str: str) -> bool:
+    if not BLACKOUT_START or not BLACKOUT_END:
+        return False
     try:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
@@ -28,10 +30,9 @@ def _blackout_message() -> str:
     )
 
 
-def _gcal_end_datetime(date: str, time: str) -> tuple[str, str]:
-    start_dt = datetime.strptime(f"{date}T{time[:5]}", "%Y-%m-%dT%H:%M")
-    end_dt = start_dt + timedelta(hours=1)
-    return end_dt.strftime("%Y-%m-%d"), end_dt.strftime("%H:%M")
+def _parse_hhmm(t: str) -> time_type:
+    h, m = t[:5].split(":")
+    return time_type(int(h), int(m))
 
 
 def execute_tool_call(
@@ -235,14 +236,66 @@ def execute_tool_call(
             if _is_blackout_date(date_val):
                 return json.dumps({"status": "error", "message": _blackout_message()})
 
-            time_val = function_args.get("time")[:5]
+            start_time_val = function_args.get("start_time")[:5]
+            end_time_val = function_args.get("end_time")[:5]
+            user_confirmed = function_args.get("user_confirmed", False)
             event_title = function_args.get("event_title")
-            end_date, end_time = _gcal_end_datetime(date_val, time_val)
+
+            start_t = _parse_hhmm(start_time_val)
+            end_t = _parse_hhmm(end_time_val)
+
+            if start_t == end_t:
+                return json.dumps({"status": "error", "message": "Start and end time cannot be the same."})
+
+            if end_t < start_t and not user_confirmed:
+                next_date = (datetime.strptime(date_val, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                return json.dumps({
+                    "status": "pending_confirmation",
+                    "message": (
+                        "SYSTEM OVERRIDE: Midnight-spanning event detected. DO NOT add the event yet. "
+                        "You MUST reply by asking the user: "
+                        f"'Adding {event_title} spans midnight — it will start on {date_val} at {start_time_val} "
+                        f"and end on {next_date} at {end_time_val}. Do you want to proceed?'"
+                    ),
+                })
+
+            end_date = (
+                (datetime.strptime(date_val, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                if end_t < start_t else date_val
+            )
+
+            if not user_confirmed:
+                existing = (
+                    supabase.table("schedule")
+                    .select("event, start_time, end_time")
+                    .eq("user_id", user_id)
+                    .eq("date", date_val)
+                    .execute()
+                    .data
+                )
+                conflicts = []
+                for row in existing:
+                    if not row.get("start_time") or not row.get("end_time"):
+                        continue
+                    e_start = _parse_hhmm(row["start_time"])
+                    e_end = _parse_hhmm(row["end_time"])
+                    if start_t < e_end and end_t > e_start:
+                        conflicts.append(f"{row['event']} ({row['start_time']}–{row['end_time']})")
+                if conflicts:
+                    conflict_list = ", ".join(conflicts)
+                    return json.dumps({
+                        "status": "pending_confirmation",
+                        "message": (
+                            "SYSTEM OVERRIDE: Schedule conflict detected. DO NOT add the event yet. "
+                            "You MUST reply by asking the user: "
+                            f"'Adding {event_title} ({start_time_val}–{end_time_val}) on {date_val} conflicts with: {conflict_list}. Do you still want to add it?'"
+                        ),
+                    })
 
             gcal_event = {
                 "summary": event_title,
-                "start": {"dateTime": f"{date_val}T{time_val}:00+08:00"},
-                "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
+                "start": {"dateTime": f"{date_val}T{start_time_val}:00+08:00"},
+                "end": {"dateTime": f"{end_date}T{end_time_val}:00+08:00"},
             }
             created = gcal_service.events().insert(calendarId="primary", body=gcal_event).execute()
             supabase.table("schedule").insert({
@@ -272,21 +325,48 @@ def execute_tool_call(
         try:
             current = gcal_service.events().get(calendarId="primary", eventId=gcal_event_id).execute()
             current_start = current.get("start", {})
+            current_end_obj = current.get("end", {})
             current_date = current_start.get("dateTime", current_start.get("date", ""))[:10]
             current_time = current_start.get("dateTime", "T00:00")[11:16]
+            _current_end_raw = current_end_obj.get("dateTime", "")
+            current_end = _current_end_raw[11:16] if len(_current_end_raw) > 15 else "23:59"
 
             date_val = function_args.get("date", current_date)
             if _is_blackout_date(date_val):
                 return json.dumps({"status": "error", "message": _blackout_message()})
 
-            time_val = function_args.get("time", current_time)[:5]
+            start_time_val = function_args.get("start_time", current_time)[:5]
+            end_time_val = function_args.get("end_time", current_end)[:5]
+            user_confirmed = function_args.get("user_confirmed", False)
             event_title = function_args.get("event_title", current.get("summary", ""))
-            end_date, end_time = _gcal_end_datetime(date_val, time_val)
+
+            start_t = _parse_hhmm(start_time_val)
+            end_t = _parse_hhmm(end_time_val)
+
+            if start_t == end_t:
+                return json.dumps({"status": "error", "message": "Start and end time cannot be the same."})
+
+            if end_t < start_t and not user_confirmed:
+                next_date = (datetime.strptime(date_val, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                return json.dumps({
+                    "status": "pending_confirmation",
+                    "message": (
+                        "SYSTEM OVERRIDE: Midnight-spanning event detected. DO NOT update the event yet. "
+                        "You MUST reply by asking the user: "
+                        f"'This event spans midnight — it will start on {date_val} at {start_time_val} "
+                        f"and end on {next_date} at {end_time_val}. Do you want to proceed?'"
+                    ),
+                })
+
+            end_date = (
+                (datetime.strptime(date_val, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                if end_t < start_t else date_val
+            )
 
             patch_body = {
                 "summary": event_title,
-                "start": {"dateTime": f"{date_val}T{time_val}:00+08:00"},
-                "end": {"dateTime": f"{end_date}T{end_time}:00+08:00"},
+                "start": {"dateTime": f"{date_val}T{start_time_val}:00+08:00"},
+                "end": {"dateTime": f"{end_date}T{end_time_val}:00+08:00"},
             }
             gcal_service.events().patch(calendarId="primary", eventId=gcal_event_id, body=patch_body).execute()
             supabase.table("schedule").update({
