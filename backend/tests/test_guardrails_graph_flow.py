@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage
 import app.chat.tool_handlers as tool_handlers
 import app.graph.chat_graph as chat_graph
 import app.graph.llm as graph_llm
+import app.graph.tools_adapter as tools_adapter
 from app.guardrails import judge as judge_module
 from app.guardrails.config import GENERATION_FALLBACK, INJECTION_REFUSAL, MAX_RETRIES
 from app.guardrails.schemas import JudgeVerdict
@@ -52,6 +53,23 @@ class _ModelMustNotRun:
 
     async def ainvoke(self, _messages):
         raise AssertionError("Model must not run: input should have been blocked")
+
+
+class _SequenceModel:
+    """Returns a preset AIMessage per call (last one repeats), so the first
+    generation and the retry generation can differ."""
+
+    def __init__(self, messages):
+        self._messages = messages
+        self.calls = 0
+
+    def bind_tools(self, _tools):
+        return self
+
+    async def ainvoke(self, _messages):
+        msg = self._messages[min(self.calls, len(self._messages) - 1)]
+        self.calls += 1
+        return msg
 
 
 def _db():
@@ -159,3 +177,39 @@ def test_judge_high_score_returns_generated_reply(monkeypatch):
     assert result["validation_status"] == "judge_pass"
     assert result["judge_score"] == 0.95
     assert model.calls == 1
+
+
+# --- Retry safety: a retry can never fire a side-effecting tool -------------
+
+def test_retry_generation_cannot_execute_a_tool(monkeypatch):
+    # Attempt 1 leaks internal prompt content (forces a retry). On the retry the
+    # model "wants" to delete an event — but retries route to regenerate_text
+    # (tools unbound), so the tool must never execute.
+    tool_calls_seen = []
+    original = tools_adapter.execute_tool_call
+    monkeypatch.setattr(
+        tools_adapter,
+        "execute_tool_call",
+        lambda *a, **k: tool_calls_seen.append(a) or original(*a, **k),
+    )
+
+    model = _SequenceModel(
+        [
+            AIMessage(content="Sure. OUTPUT FORMAT: leaking internals."),  # attempt 1 -> retry
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {"name": "delete_schedule_event", "args": {"event_id": "e1"}, "id": "tc-1"}
+                ],
+            ),  # retry tries to mutate
+        ]
+    )
+    _install(monkeypatch, model)
+
+    result = _invoke(_base_state("what's on my calendar at noon?"))
+
+    # The retry ran (call 2), but no tool was ever executed and no mutation reply.
+    assert model.calls == 2
+    assert tool_calls_seen == []
+    assert "deleted" not in result["final_reply"].lower()
+    assert "couldn't complete" not in result["final_reply"].lower()

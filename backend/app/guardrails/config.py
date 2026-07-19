@@ -34,6 +34,11 @@ GENERATION_FALLBACK = (
     "rephrase what you need, or give me a bit more detail?"
 )
 
+# Substituted for any stored/retrieved context value (a task title, event
+# summary, or past message) that trips an injection signature, so the payload
+# never reaches the model while the item's ID stays usable.
+REDACTED_CONTEXT = "[content withheld by guardrail]"
+
 
 def judge_enabled() -> bool:
     """Whether the LLM-as-a-judge node should make its evaluation call.

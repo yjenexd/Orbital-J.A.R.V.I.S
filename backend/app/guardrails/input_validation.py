@@ -87,6 +87,21 @@ def _control_char_ratio(text: str) -> float:
     return control / len(text)
 
 
+def contains_injection(text: str) -> str | None:
+    """Return the name of the first injection signature `text` matches, or None.
+
+    The shared detector behind every channel that feeds the model — the live user
+    message (validate_input), retrieved RAG history, and DB-derived context —
+    so all three screen against one signature set that can't drift apart.
+    """
+    if not text:
+        return None
+    for category, pattern in _INJECTION_PATTERNS:
+        if pattern.search(text):
+            return category
+    return None
+
+
 def validate_input(text: str) -> GuardrailVerdict:
     """Screen a raw user message before generation.
 
@@ -112,12 +127,12 @@ def validate_input(text: str) -> GuardrailVerdict:
             False, "malformed_input", "Message contains excessive control characters."
         )
 
-    for category, pattern in _INJECTION_PATTERNS:
-        if pattern.search(text):
-            return GuardrailVerdict(
-                False,
-                "prompt_injection",
-                f"Blocked input matching {category} signature.",
-            )
+    category = contains_injection(text)
+    if category:
+        return GuardrailVerdict(
+            False,
+            "prompt_injection",
+            f"Blocked input matching {category} signature.",
+        )
 
     return GuardrailVerdict(True, "clean", "Input passed pre-generation guardrails.")

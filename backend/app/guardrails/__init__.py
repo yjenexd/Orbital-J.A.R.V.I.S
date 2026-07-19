@@ -12,7 +12,7 @@ from app.guardrails.config import (
     MAX_RETRIES,
     judge_enabled,
 )
-from app.guardrails.input_validation import validate_input
+from app.guardrails.input_validation import contains_injection, validate_input
 from app.guardrails.judge import run_judge
 from app.guardrails.output_validation import (
     validate_chat_output,
@@ -24,6 +24,7 @@ from app.guardrails.schemas import GuardrailVerdict, JudgeVerdict
 
 __all__ = [
     "validate_input",
+    "contains_injection",
     "validate_chat_output",
     "validate_json_schema",
     "validate_triage_output",
