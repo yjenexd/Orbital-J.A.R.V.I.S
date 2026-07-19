@@ -11,6 +11,16 @@ from app.prompts import CHAT_SYSTEM_PROMPT
 from app.graph import llm
 from app.graph.state import AgentState
 from app.graph.tools_adapter import tools_node
+from app.guardrails import judge as judge_module
+from app.guardrails.config import (
+    GENERATION_FALLBACK,
+    INJECTION_REFUSAL,
+    MALFORMED_INPUT_REFUSAL,
+    MAX_RETRIES,
+    judge_enabled,
+)
+from app.guardrails.input_validation import validate_input
+from app.guardrails.output_validation import validate_chat_output
 from app.rag.embedder import embed_text, embeddings_enabled
 from app.rag.retriever import retrieve_relevant_messages
 
@@ -125,6 +135,23 @@ def non_action_guard(state: AgentState) -> dict:
     if _is_non_action_message(state["user_message"]):
         return {"final_reply": "Ready when you are. Tell me what task or event you want to manage."}
     return {}
+
+
+def input_guardrail(state: AgentState) -> dict:
+    """Pre-generation guardrail. Screens the raw user message for prompt
+    injection / instruction-override signatures and malformed payloads BEFORE any
+    prompt is composed or the model is called. A block sets a canned safe
+    `final_reply`, routing straight to persist_reply (generation is skipped)."""
+    verdict = validate_input(state["user_message"])
+    if verdict.passed:
+        return {"validation_status": "input_ok"}
+
+    if verdict.category == "prompt_injection":
+        print(f"[GUARDRAIL] input blocked: {verdict.reason}")
+        return {"final_reply": INJECTION_REFUSAL, "validation_status": "input_blocked_injection"}
+
+    print(f"[GUARDRAIL] input rejected: {verdict.reason}")
+    return {"final_reply": MALFORMED_INPUT_REFUSAL, "validation_status": "input_blocked_malformed"}
 
 
 def ingest_context(state: AgentState) -> dict:
@@ -245,6 +272,15 @@ async def agent(state: AgentState, config: RunnableConfig) -> dict:
         state.get("retrieved_docs", [])
     )
 
+    # On a guardrail/judge retry, tell the model exactly why its last reply was
+    # rejected so it can self-correct rather than repeat the violation.
+    feedback = state.get("guardrail_feedback")
+    if feedback:
+        system_content += (
+            f"\n\nREVISION REQUIRED: Your previous reply was rejected because: "
+            f"{feedback}. Produce a corrected, fully compliant reply."
+        )
+
     prompt_messages = [SystemMessage(content=system_content)]
     for msg in state.get("recent_messages", []):
         role = msg.get("role")
@@ -295,6 +331,84 @@ def synthesize_reply(state: AgentState) -> dict:
     return {"final_reply": reply}
 
 
+def output_guardrail(state: AgentState) -> dict:
+    """Post-generation structural/tone guardrail. Enforces the conversational
+    OUTPUT FORMAT contract on `final_reply`:
+
+    - clean               -> pass through to the judge (text path) or persist.
+    - cosmetic violation  -> sanitise in place and pass (doesn't spend a retry).
+    - substantive failure -> retry generation with feedback (text path only, so
+      no already-executed tool is re-run), or fall back once the retry budget is
+      spent / on the tool path.
+    """
+    reply = state.get("final_reply", "")
+    is_text_path = not (state.get("tool_statuses") or [])
+    verdict = validate_chat_output(reply)
+
+    if verdict.passed:
+        return {"validation_status": "output_ok", "guardrail_route": "pass"}
+
+    if verdict.sanitized:
+        return {
+            "final_reply": verdict.sanitized,
+            "validation_status": f"output_sanitized:{verdict.category}",
+            "guardrail_route": "pass",
+        }
+
+    retry_count = state.get("retry_count", 0)
+    if is_text_path and retry_count < MAX_RETRIES:
+        print(f"[GUARDRAIL] output retry ({retry_count + 1}/{MAX_RETRIES}): {verdict.reason}")
+        return {
+            "guardrail_feedback": verdict.reason,
+            "retry_count": retry_count + 1,
+            "validation_status": f"output_retry:{verdict.category}",
+            "guardrail_route": "retry",
+        }
+
+    print(f"[GUARDRAIL] output fallback: {verdict.reason}")
+    return {
+        "final_reply": GENERATION_FALLBACK,
+        "validation_status": f"output_fallback:{verdict.category}",
+        "guardrail_route": "fallback",
+    }
+
+
+async def judge(state: AgentState, config: RunnableConfig) -> dict:
+    """LLM-as-a-judge accuracy gate. Runs only on the pure-text path (tool
+    confirmations are deterministic). A passing score persists the reply; a low
+    score retries with feedback, or falls back once the budget is spent."""
+    api_key = config.get("configurable", {}).get("groq_api_key")
+    verdict = await judge_module.run_judge(
+        state["user_message"], state.get("final_reply", ""), api_key
+    )
+
+    if verdict.passed:
+        return {
+            "judge_score": verdict.score,
+            "validation_status": "judge_pass",
+            "guardrail_route": "pass",
+        }
+
+    retry_count = state.get("retry_count", 0)
+    if retry_count < MAX_RETRIES:
+        print(f"[JUDGE] low accuracy ({verdict.score}), retry {retry_count + 1}/{MAX_RETRIES}")
+        return {
+            "judge_score": verdict.score,
+            "guardrail_feedback": f"Low accuracy ({verdict.score}): {verdict.reason}",
+            "retry_count": retry_count + 1,
+            "validation_status": "judge_retry",
+            "guardrail_route": "retry",
+        }
+
+    print(f"[JUDGE] low accuracy ({verdict.score}), retries exhausted -> fallback")
+    return {
+        "judge_score": verdict.score,
+        "final_reply": GENERATION_FALLBACK,
+        "validation_status": "judge_fallback",
+        "guardrail_route": "fallback",
+    }
+
+
 def persist_reply(state: AgentState) -> dict:
     """Single consolidated assistant-message insert (replaces the 4 insert sites
     of the old route). The single place the assistant reply's embedding is
@@ -324,9 +438,29 @@ def _route_after_guard(state: AgentState) -> str:
     return "casual" if state.get("final_reply") else "continue"
 
 
+def _route_after_input_guardrail(state: AgentState) -> str:
+    return "blocked" if state.get("final_reply") else "continue"
+
+
 def _route_after_agent(state: AgentState) -> str:
     last_message = state["messages"][-1]
     return "tools" if getattr(last_message, "tool_calls", None) else "reply"
+
+
+def _route_after_output_guardrail(state: AgentState) -> str:
+    route = state.get("guardrail_route")
+    if route == "retry":
+        return "retry"
+    # Only the pure-text path gets the (LLM) judge; tool confirmations are
+    # deterministic, and re-running the model there would risk re-firing tools.
+    is_text_path = not (state.get("tool_statuses") or [])
+    if route == "pass" and is_text_path and judge_enabled():
+        return "judge"
+    return "persist"
+
+
+def _route_after_judge(state: AgentState) -> str:
+    return "retry" if state.get("guardrail_route") == "retry" else "persist"
 
 
 # ---------------------------------------------------------------------------
@@ -339,11 +473,14 @@ def build_chat_graph():
     graph.add_node("check_date_shortcut", check_date_shortcut)
     graph.add_node("load_history", load_history_and_log_user_message)
     graph.add_node("non_action_guard", non_action_guard)
+    graph.add_node("input_guardrail", input_guardrail)
     graph.add_node("ingest_context", ingest_context)
     graph.add_node("retrieve", retrieve)
     graph.add_node("agent", agent)
     graph.add_node("tools", tools_node)
     graph.add_node("synthesize_reply", synthesize_reply)
+    graph.add_node("output_guardrail", output_guardrail)
+    graph.add_node("judge", judge)
     graph.add_node("persist_reply", persist_reply)
 
     graph.add_edge(START, "check_date_shortcut")
@@ -356,7 +493,13 @@ def build_chat_graph():
     graph.add_conditional_edges(
         "non_action_guard",
         _route_after_guard,
-        {"casual": "persist_reply", "continue": "ingest_context"},
+        {"casual": "persist_reply", "continue": "input_guardrail"},
+    )
+    # Pre-generation guardrail: a block short-circuits straight to persist.
+    graph.add_conditional_edges(
+        "input_guardrail",
+        _route_after_input_guardrail,
+        {"blocked": "persist_reply", "continue": "ingest_context"},
     )
     graph.add_edge("ingest_context", "retrieve")
     graph.add_edge("retrieve", "agent")
@@ -367,7 +510,18 @@ def build_chat_graph():
         {"tools": "tools", "reply": "synthesize_reply"},
     )
     graph.add_edge("tools", "synthesize_reply")
-    graph.add_edge("synthesize_reply", "persist_reply")
+    graph.add_edge("synthesize_reply", "output_guardrail")
+    # Post-generation guardrail -> (retry generation | LLM judge | persist).
+    graph.add_conditional_edges(
+        "output_guardrail",
+        _route_after_output_guardrail,
+        {"retry": "agent", "judge": "judge", "persist": "persist_reply"},
+    )
+    graph.add_conditional_edges(
+        "judge",
+        _route_after_judge,
+        {"retry": "agent", "persist": "persist_reply"},
+    )
     graph.add_edge("persist_reply", END)
 
     return graph.compile()

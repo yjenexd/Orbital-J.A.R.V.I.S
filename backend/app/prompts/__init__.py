@@ -11,6 +11,11 @@ from app.prompts.briefing import (
     build_briefing_prompt,
 )
 from app.prompts.chat import CHAT_PROMPT_VERSION, CHAT_SYSTEM_PROMPT
+from app.prompts.judge import (
+    JUDGE_PROMPT_VERSION,
+    JUDGE_SYSTEM_PROMPT,
+    build_judge_prompt,
+)
 from app.prompts.registry import PROMPT_REGISTRY, PromptSpec, get_spec
 from app.prompts.triage import TRIAGE_PROMPT_VERSION, build_triage_prompt
 
@@ -26,6 +31,9 @@ __all__ = [
     "BRIEFING_SYSTEM_PROMPT",
     "build_briefing_prompt",
     "BRIEFING_PROMPT_VERSION",
+    "JUDGE_SYSTEM_PROMPT",
+    "build_judge_prompt",
+    "JUDGE_PROMPT_VERSION",
     "PROMPT_REGISTRY",
     "PromptSpec",
     "get_spec",

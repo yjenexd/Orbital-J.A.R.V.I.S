@@ -13,6 +13,7 @@ from openai import AsyncOpenAI
 from app.clients import supabase
 from app.config import CURR_DATE
 from app.graph.triage_state import TriageState
+from app.guardrails.output_validation import validate_triage_output
 from app.prompts import build_triage_prompt
 
 try:  # LangGraph is a hard dep, but keep imports grouped/obvious.
@@ -44,6 +45,15 @@ async def score_priority(state: TriageState) -> dict:
             response_format={"type": "json_object"},
         )
         ai_data = json.loads(response.choices[0].message.content)
+
+        # Post-generation structural guardrail: the model must return the exact
+        # triage schema. Anything off-contract routes to the neutral fallback
+        # rather than writing a malformed score back to the task row.
+        schema_check = validate_triage_output(ai_data)
+        if not schema_check.passed:
+            print(f"Triage output failed schema for task {state['task_id']}: {schema_check.reason}")
+            return {"error": f"schema_invalid: {schema_check.reason}"}
+
         level_raw = ai_data.get("priority_level", "medium").lower()
         priority_level = _LEVEL_MAP.get(level_raw, "medium")
 
