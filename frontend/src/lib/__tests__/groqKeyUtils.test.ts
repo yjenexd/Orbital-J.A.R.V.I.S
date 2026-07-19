@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { createElement } from 'react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { validateGroqKeyFormat } from '../groqKeyUtils'
+import ProfilePage from '../../pages/ProfilePage'
+
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({ session: null, loading: false }),
+}))
+
+vi.mock('../../lib/supabaseClient', () => ({
+  supabase: { auth: { signOut: vi.fn() } },
+}))
 
 describe('validateGroqKeyFormat', () => {
   it('returns null for a valid gsk_ key', () => {
@@ -26,31 +37,27 @@ describe('validateGroqKeyFormat', () => {
 })
 
 describe('Groq key localStorage persistence', () => {
-  const store: Record<string, string> = {}
-  const mockStorage = {
-    getItem: (k: string) => store[k] ?? null,
-    setItem: (k: string, v: string) => { store[k] = v },
-    removeItem: (k: string) => { delete store[k] },
-    clear: () => { Object.keys(store).forEach((k) => delete store[k]) },
-  }
-
   beforeEach(() => {
-    mockStorage.clear()
-    vi.stubGlobal('localStorage', mockStorage)
+    localStorage.clear()
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    vi.clearAllMocks()
   })
 
-  it('persists key in localStorage on save', () => {
-    localStorage.setItem('groq_api_key', 'gsk_testkey')
+  it('persists key in localStorage on Save Key click', () => {
+    render(createElement(ProfilePage))
+    fireEvent.change(screen.getByLabelText('Groq API Key'), { target: { value: 'gsk_testkey' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Key' }))
+
     expect(localStorage.getItem('groq_api_key')).toBe('gsk_testkey')
   })
 
-  it('wipes key from localStorage on clear', () => {
+  it('wipes key from localStorage on Clear click', () => {
     localStorage.setItem('groq_api_key', 'gsk_testkey')
-    localStorage.removeItem('groq_api_key')
+    render(createElement(ProfilePage))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
     expect(localStorage.getItem('groq_api_key')).toBeNull()
   })
 })
