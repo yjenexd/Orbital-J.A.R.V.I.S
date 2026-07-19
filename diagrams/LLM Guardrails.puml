@@ -1,0 +1,72 @@
+@startuml
+skinparam ActivityBackgroundColor #F9F9F9
+skinparam ActivityBorderColor #333333
+skinparam ArrowColor #666666
+skinparam ConditionBackgroundColor #E0F7FA
+skinparam ConditionBorderColor #0277BD
+skinparam DefaultFontName Arial
+
+title LLM Guardrails & Evaluator Graph
+
+start
+
+:User Submits Prompt (Frontend);
+:FastAPI Backend receives request;
+
+partition "State Initialization" {
+    :Initialize LangGraph State Object:
+    * query
+    * validation_status
+    * generated_output
+    * retry_count
+    * judge_score;
+}
+
+partition "LangGraph Orchestration" {
+    :Input Guardrail Node
+    (Check for prompt injections & malformed inputs);
+    
+    if (Input Safe?) then (no - Injection Detected)
+        :Security Fallback Response;
+        kill
+    else (yes)
+        repeat
+            :Generation Node
+            (Compose response using version-controlled prompts);
+            
+            :Output Guardrail Node
+            (Validate JSON schema & tone adherence);
+            
+            if (Structural & Tone Check Passed?) then (no)
+                if (Retry Limit Reached?) then (yes)
+                    :Safe Fallback Response;
+                    kill
+                else (no)
+                    :Retry Node
+                    (Provide error feedback to LLM);
+                endif
+            else (yes)
+                :LLM Judge Router (Evaluator Node)
+                (Rate output accuracy & context alignment);
+                
+                if (Semantic Accuracy Check Passed?) then (no)
+                    if (Retry Limit Reached?) then (yes)
+                        :Safe Fallback Response;
+                        kill
+                    else (no)
+                        :Retry Node
+                        (Provide error feedback to LLM);
+                    endif
+                else (yes)
+                    :Validated Response;
+                    break
+                endif
+            endif
+        repeat while (retry_count < Max Retries)
+    endif
+}
+
+:Return Final Validated Output to Frontend;
+
+stop
+@enduml
