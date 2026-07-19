@@ -302,11 +302,8 @@ def execute_tool_call(
                 "user_id": user_id,
                 "event": event_title,
                 "date": date_val,
-                # start_time/end_time back the overlap/merge-conflict detection
-                # feature; `time` is kept for the current schedule readers.
-                "time": time_val,
-                "start_time": time_val,
-                "end_time": end_time,
+                "start_time": start_time_val,
+                "end_time": end_time_val,
                 "protected": False,
                 "gcal_event_id": created["id"],
             }).execute()
@@ -372,11 +369,8 @@ def execute_tool_call(
             supabase.table("schedule").update({
                 "event": event_title,
                 "date": date_val,
-                # Keep start_time/end_time in sync so overlap/merge-conflict
-                # detection sees the updated slot; `time` retained for readers.
-                "time": time_val,
-                "start_time": time_val,
-                "end_time": end_time,
+                "start_time": start_time_val,
+                "end_time": end_time_val,
             }).eq("gcal_event_id", gcal_event_id).eq("user_id", user_id).execute()
         except Exception as e:
             print(f"[GCAL ERROR] update_schedule_event: {e}")
