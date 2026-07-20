@@ -39,3 +39,6 @@ jobs:
       - run: npm ci
       - run: npx tsc -b
       - run: npm test
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
