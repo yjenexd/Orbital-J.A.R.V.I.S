@@ -12,6 +12,16 @@ vi.mock('../../lib/supabaseClient', () => ({
   supabase: { auth: { signOut: vi.fn() } },
 }))
 
+const makeLocalStorageMock = () => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: (key: string) => store[key] ?? null,
+    setItem: (key: string, value: string) => { store[key] = value },
+    removeItem: (key: string) => { delete store[key] },
+    clear: () => { store = {} },
+  }
+}
+
 describe('validateGroqKeyFormat', () => {
   it('returns null for a valid gsk_ key', () => {
     expect(validateGroqKeyFormat('gsk_abc123')).toBeNull()
@@ -37,12 +47,15 @@ describe('validateGroqKeyFormat', () => {
 })
 
 describe('Groq key localStorage persistence', () => {
+  const mockStorage = makeLocalStorageMock()
+
   beforeEach(() => {
-    localStorage.clear()
+    mockStorage.clear()
+    vi.stubGlobal('localStorage', mockStorage)
   })
 
   afterEach(() => {
-    vi.clearAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('persists key in localStorage on Save Key click', () => {
@@ -50,14 +63,14 @@ describe('Groq key localStorage persistence', () => {
     fireEvent.change(screen.getByLabelText('Groq API Key'), { target: { value: 'gsk_testkey' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save Key' }))
 
-    expect(localStorage.getItem('groq_api_key')).toBe('gsk_testkey')
+    expect(mockStorage.getItem('groq_api_key')).toBe('gsk_testkey')
   })
 
   it('wipes key from localStorage on Clear click', () => {
-    localStorage.setItem('groq_api_key', 'gsk_testkey')
+    mockStorage.setItem('groq_api_key', 'gsk_testkey')
     render(createElement(ProfilePage))
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
 
-    expect(localStorage.getItem('groq_api_key')).toBeNull()
+    expect(mockStorage.getItem('groq_api_key')).toBeNull()
   })
 })
