@@ -14,6 +14,7 @@ from app.clients import supabase
 from app.config import CURR_DATE
 from app.graph.triage_state import TriageState
 from app.guardrails.output_validation import validate_triage_output
+from app.guardrails.screening import screen_text
 from app.prompts import build_triage_prompt
 
 try:  # LangGraph is a hard dep, but keep imports grouped/obvious.
@@ -31,10 +32,12 @@ async def score_priority(state: TriageState) -> dict:
         base_url="https://api.groq.com/openai/v1",
         api_key=state["x_groq_api_key"],
     )
+    # Screen the task title and user-supplied context (both untrusted free text)
+    # so a title/note crafted to read as an instruction can't steer the score.
     triage_prompt = build_triage_prompt(
-        state["title"],
+        screen_text(state["title"]),
         state["deadline"],
-        state.get("user_context", ""),
+        screen_text(state.get("user_context", "")),
         CURR_DATE.isoformat(),
     )
 

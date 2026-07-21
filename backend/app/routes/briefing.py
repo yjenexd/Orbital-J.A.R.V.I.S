@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from openai import AsyncOpenAI
 
 from app.clients import get_current_user_id, get_google_calendar_service, get_groq_client, supabase
+from app.guardrails import redact_rows
 from app.prompts import BRIEFING_SYSTEM_PROMPT, build_briefing_prompt
 
 router = APIRouter()
@@ -72,7 +73,14 @@ async def day_at_a_glance_briefing(
                 "has_events": False,
             }
 
-        briefing_prompt = build_briefing_prompt(schedule_data, tasks_res.data, email_res.data)
+        # Screen third-party content (event titles, task titles, and — the
+        # highest-risk channel — email sender/subject/summary) for injection
+        # payloads before it enters the briefing prompt.
+        safe_schedule = redact_rows(schedule_data, "event")
+        safe_tasks = redact_rows(tasks_res.data, "title")
+        safe_emails = redact_rows(email_res.data, "sender", "subject", "summary")
+
+        briefing_prompt = build_briefing_prompt(safe_schedule, safe_tasks, safe_emails)
 
         ai_response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",

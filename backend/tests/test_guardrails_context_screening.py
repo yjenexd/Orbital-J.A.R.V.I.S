@@ -8,6 +8,7 @@ context (task titles, event summaries) — which can carry third-party payloads.
 import app.graph.chat_graph as chat_graph
 from app.guardrails.config import REDACTED_CONTEXT
 from app.guardrails.input_validation import contains_injection
+from app.guardrails.screening import redact_rows, screen_text
 from tests._fakes import FakeSupabase
 
 
@@ -72,8 +73,34 @@ def test_ingest_context_redacts_malicious_event_summary(monkeypatch):
     # No gcal token -> events come back empty; screen via the helper directly to
     # prove event summaries are covered by the same redaction path.
     events = [{"event_id": "e1", "event": INJECTION}, {"event_id": "e2", "event": "Orbital sync"}]
-    safe = chat_graph._redact_untrusted(events, "event")
+    safe = redact_rows(events, "event")
 
     assert safe[0]["event"] == REDACTED_CONTEXT
     assert safe[0]["event_id"] == "e1"  # id preserved for tool calls
     assert safe[1]["event"] == "Orbital sync"
+
+
+def test_redact_rows_covers_multiple_fields_and_preserves_originals():
+    rows = [
+        {"email_id": 1, "sender": "boss@x.com", "subject": INJECTION, "summary": "ok"},
+        {"email_id": 2, "sender": INJECTION, "subject": "lunch", "summary": "see you"},
+        {"email_id": 3, "sender": "a@x.com", "subject": "hi", "summary": "all good"},
+    ]
+    safe = redact_rows(rows, "sender", "subject", "summary")
+
+    assert safe[0]["subject"] == REDACTED_CONTEXT and safe[0]["sender"] == "boss@x.com"
+    assert safe[1]["sender"] == REDACTED_CONTEXT and safe[1]["subject"] == "lunch"
+    assert safe[2] == rows[2]  # untouched row returned as-is
+    # Originals are not mutated (redaction copies the row).
+    assert rows[0]["subject"] == INJECTION
+
+
+def test_screen_text_handles_none_and_flags():
+    assert screen_text(None) == ""
+    assert screen_text("Buy fish food") == "Buy fish food"
+    assert screen_text(INJECTION) == REDACTED_CONTEXT
+
+
+def test_redact_rows_handles_none_and_missing_fields():
+    assert redact_rows(None, "title") == []
+    assert redact_rows([{"task_id": 1}], "title") == [{"task_id": 1}]

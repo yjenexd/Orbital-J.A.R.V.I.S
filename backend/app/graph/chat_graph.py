@@ -17,11 +17,11 @@ from app.guardrails.config import (
     INJECTION_REFUSAL,
     MALFORMED_INPUT_REFUSAL,
     MAX_RETRIES,
-    REDACTED_CONTEXT,
     judge_enabled,
 )
 from app.guardrails.input_validation import contains_injection, validate_input
 from app.guardrails.output_validation import validate_chat_output
+from app.guardrails.screening import redact_rows, screen_text
 from app.rag.embedder import embed_text, embeddings_enabled
 from app.rag.retriever import retrieve_relevant_messages
 
@@ -155,19 +155,6 @@ def input_guardrail(state: AgentState) -> dict:
     return {"final_reply": MALFORMED_INPUT_REFUSAL, "validation_status": "input_blocked_malformed"}
 
 
-def _redact_untrusted(rows: list[dict], text_field: str) -> list[dict]:
-    """Redact `text_field` in any row whose value trips an injection signature,
-    leaving the rest of the row (notably its ID) intact so the model can still
-    act on the item. Guards the DB-context channel, which — unlike the live user
-    message — carries third-party content (invite titles, email-derived tasks)."""
-    safe: list[dict] = []
-    for row in rows:
-        if contains_injection(str(row.get(text_field, ""))):
-            row = {**row, text_field: REDACTED_CONTEXT}
-        safe.append(row)
-    return safe
-
-
 def ingest_context(state: AgentState) -> dict:
     """Assemble the live DB context block (tasks + calendar + user) for the prompt,
     and build the per-user Google Calendar client into state for the tools node."""
@@ -237,10 +224,9 @@ def ingest_context(state: AgentState) -> dict:
 
     # Screen third-party-sourced context (task titles, event summaries) for
     # injection payloads before it enters the prompt; IDs are preserved.
-    safe_tasks = _redact_untrusted(active_tasks.data or [], "title")
-    safe_events = _redact_untrusted(active_events_data, "event")
-    if contains_injection(user_name):
-        user_name = REDACTED_CONTEXT
+    safe_tasks = redact_rows(active_tasks.data, "title")
+    safe_events = redact_rows(active_events_data, "event")
+    user_name = screen_text(user_name)
 
     db_context = f"""
         LIVE DATABASE CONTEXT (You must use these exact IDs for updates or deletions):
@@ -351,7 +337,17 @@ def synthesize_reply(state: AgentState) -> dict:
 
     if not tool_statuses:
         # No tool calls this turn: reply with the model's own text.
-        reply = state.get("agent_text") or "How can I help you with your schedule or tasks right now?"
+        reply = state.get("agent_text")
+        if not reply or not reply.strip():
+            # A retry (tools-unbound regenerate) that produced no usable text must
+            # fall back informatively rather than collapse to the generic greeting,
+            # which would otherwise pass the output guardrail and be served as the
+            # "answer". On a first pass, the greeting is still the right default.
+            reply = (
+                GENERATION_FALLBACK
+                if state.get("retry_count", 0) > 0
+                else "How can I help you with your schedule or tasks right now?"
+            )
         return {"final_reply": reply}
 
     tool_errors: list[str] = []

@@ -93,6 +93,11 @@ def contains_injection(text: str) -> str | None:
     The shared detector behind every channel that feeds the model — the live user
     message (validate_input), retrieved RAG history, and DB-derived context —
     so all three screen against one signature set that can't drift apart.
+
+    Known limitation: this is high-precision signature matching, NOT a general
+    injection solver. A paraphrased or novel instruction that matches no signature
+    passes through; callers additionally delimit untrusted blocks as data as a
+    backstop, but neither is a guarantee against a determined adversary.
     """
     if not text:
         return None

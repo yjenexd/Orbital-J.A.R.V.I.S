@@ -14,6 +14,7 @@ from app.guardrails.config import (
 )
 from app.guardrails.input_validation import contains_injection, validate_input
 from app.guardrails.judge import run_judge
+from app.guardrails.screening import redact_rows, screen_text
 from app.guardrails.output_validation import (
     validate_chat_output,
     validate_json_schema,
@@ -25,6 +26,8 @@ from app.guardrails.schemas import GuardrailVerdict, JudgeVerdict
 __all__ = [
     "validate_input",
     "contains_injection",
+    "screen_text",
+    "redact_rows",
     "validate_chat_output",
     "validate_json_schema",
     "validate_triage_output",

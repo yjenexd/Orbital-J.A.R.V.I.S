@@ -213,3 +213,21 @@ def test_retry_generation_cannot_execute_a_tool(monkeypatch):
     assert tool_calls_seen == []
     assert "deleted" not in result["final_reply"].lower()
     assert "couldn't complete" not in result["final_reply"].lower()
+
+
+def test_retry_with_empty_output_falls_back_informatively(monkeypatch):
+    # Attempt 1 leaks -> retry. The retry returns empty content (e.g. a stray
+    # tool-call message). Rather than collapse to the generic greeting, the turn
+    # must serve the safe fallback.
+    model = _SequenceModel(
+        [
+            AIMessage(content="OUTPUT FORMAT: leaking internals."),  # attempt 1 -> retry
+            AIMessage(content="", tool_calls=[{"name": "add_task", "args": {}, "id": "tc-9"}]),
+        ]
+    )
+    _install(monkeypatch, model)
+
+    result = _invoke(_base_state("what's my next meeting?"))
+
+    assert result["final_reply"] == GENERATION_FALLBACK
+    assert "how can i help" not in result["final_reply"].lower()
