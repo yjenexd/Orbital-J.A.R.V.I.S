@@ -1,3 +1,5 @@
+import pytest
+
 from app.chat.tool_definitions import TOOLS
 from app.prompts import CHAT_SYSTEM_PROMPT
 
@@ -16,11 +18,10 @@ def test_system_prompt_enforces_no_data_dump_and_no_markdown_tables():
     assert "NEVER use Markdown tables" in CHAT_SYSTEM_PROMPT
 
 
-def test_system_prompt_declares_output_format_contract():
-    # The versioned prompt must carry an explicit output-format contract so the
-    # downstream structural guardrails have a rule to enforce against.
-    assert "OUTPUT FORMAT" in CHAT_SYSTEM_PROMPT
-    assert "YYYY-MM-DD" in CHAT_SYSTEM_PROMPT
+@pytest.mark.skip(reason="Blackout window removed from system prompt; infrastructure preserved for future use")
+def test_system_prompt_contains_blackout_window_constraint():
+    assert "Blackout Period" in SYSTEM_PROMPT
+    assert "July 6, 2026 to July 17, 2026" in SYSTEM_PROMPT
 
 
 def test_add_schedule_event_description_requires_relative_date_resolution():

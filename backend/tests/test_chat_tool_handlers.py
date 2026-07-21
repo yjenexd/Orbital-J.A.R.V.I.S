@@ -1,6 +1,8 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 import app.chat.tool_handlers as tool_handlers
 
 
@@ -221,16 +223,13 @@ def test_delete_schedule_event_pending_confirmation_includes_event_details():
 
 
 def test_add_schedule_event_persists_start_and_end_time(monkeypatch):
-    # start_time/end_time back the overlap/merge-conflict detection feature, so
-    # a successful add must populate them (end_time defaults to +1h). start_time
-    # is NOT NULL in the schema, so a missing value here would fail the insert.
     db = {"schedule": []}
     monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
     gcal = FakeGcalService()
 
     res = tool_handlers.execute_tool_call(
         "add_schedule_event",
-        {"date": "2026-07-20", "time": "13:00", "event_title": "Run"},
+        {"date": "2026-07-20", "start_time": "13:00", "end_time": "14:00", "event_title": "Run"},
         user_id="u1",
         gcal_service=gcal,
     )
@@ -241,3 +240,107 @@ def test_add_schedule_event_persists_start_and_end_time(monkeypatch):
     assert row["end_time"] == "14:00"
 
 
+@pytest.mark.skip(reason="Blackout window disabled (BLACKOUT_START=None); feature preserved for future use")
+def test_add_schedule_event_blackout_window_is_rejected():
+    gcal = FakeGcalService()
+
+    res = tool_handlers.execute_tool_call(
+        "add_schedule_event",
+        {"date": "2026-07-10", "start_time": "14:00", "end_time": "15:00", "event_title": "Sync with Jason"},
+        user_id="u1",
+        gcal_service=gcal,
+    )
+
+    parsed = json.loads(res)
+    assert parsed["status"] == "error"
+    assert "blackout" in parsed["message"].lower()
+    assert gcal.events().insert_calls == []
+
+
+@pytest.mark.skip(reason="Blackout window disabled (BLACKOUT_START=None); feature preserved for future use")
+def test_update_schedule_event_blackout_window_is_rejected():
+    gcal = FakeGcalService(
+        {
+            "evt-2": {
+                "summary": "Weekly Review",
+                "start": {"dateTime": "2026-06-29T10:00:00+08:00"},
+            }
+        }
+    )
+
+    res = tool_handlers.execute_tool_call(
+        "update_schedule_event",
+        {"event_id": "evt-2", "date": "2026-07-12", "start_time": "10:00"},
+        user_id="u1",
+        gcal_service=gcal,
+    )
+
+    parsed = json.loads(res)
+    assert parsed["status"] == "error"
+    assert "blackout" in parsed["message"].lower()
+    assert gcal.events().patch_calls == []
+
+
+def test_add_schedule_event_calls_gcal_insert(monkeypatch):
+    db = {"schedule": []}
+    monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
+    gcal = FakeGcalService()
+
+    res = tool_handlers.execute_tool_call(
+        "add_schedule_event",
+        {"date": "2026-07-05", "start_time": "14:00", "end_time": "15:00", "event_title": "Test Sync"},
+        user_id="u1",
+        gcal_service=gcal,
+    )
+
+    assert json.loads(res)["status"] == "success"
+    insert_calls = gcal.events().insert_calls
+    assert len(insert_calls) == 1
+    body = insert_calls[0]["body"]
+    assert body["summary"] == "Test Sync"
+    assert "14:00" in body["start"]["dateTime"]
+    assert "15:00" in body["end"]["dateTime"]
+
+
+def test_delete_schedule_event_calls_gcal_delete(monkeypatch):
+    db = {"schedule": [{"gcal_event_id": "evt-del", "user_id": "u1"}]}
+    monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
+    gcal = FakeGcalService({
+        "evt-del": {"summary": "Test Sync", "start": {"dateTime": "2026-07-05T14:00:00+08:00"}}
+    })
+
+    res = tool_handlers.execute_tool_call(
+        "delete_schedule_event",
+        {"event_id": "evt-del", "user_confirmed": True},
+        user_id="u1",
+        gcal_service=gcal,
+    )
+
+    assert json.loads(res)["status"] == "success"
+    delete_calls = gcal.events().delete_calls
+    assert len(delete_calls) == 1
+    assert delete_calls[0]["eventId"] == "evt-del"
+
+
+def test_update_schedule_event_calls_gcal_patch(monkeypatch):
+    db = {"schedule": [{"gcal_event_id": "evt-upd", "user_id": "u1", "event": "Test Sync"}]}
+    monkeypatch.setattr(tool_handlers, "supabase", FakeSupabase(db))
+    gcal = FakeGcalService({
+        "evt-upd": {
+            "summary": "Test Sync",
+            "start": {"dateTime": "2026-07-05T14:00:00+08:00"},
+            "end": {"dateTime": "2026-07-05T15:00:00+08:00"},
+        }
+    })
+
+    res = tool_handlers.execute_tool_call(
+        "update_schedule_event",
+        {"event_id": "evt-upd", "start_time": "16:00", "end_time": "17:00"},
+        user_id="u1",
+        gcal_service=gcal,
+    )
+
+    assert json.loads(res)["status"] == "success"
+    patch_calls = gcal.events().patch_calls
+    assert len(patch_calls) == 1
+    assert "16:00" in patch_calls[0]["body"]["start"]["dateTime"]

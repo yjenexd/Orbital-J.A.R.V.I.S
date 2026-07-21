@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { validateGroqKeyFormat } from '../lib/groqKeyUtils'
 import {
   Box,
   Card,
@@ -86,9 +87,10 @@ export default function ProfilePage() {
     groqKey.length > 8 ? groqKey.slice(0, 4) + '........' + groqKey.slice(-4) : groqKey
 
   const handleValidate = () => {
-    if (!groqKey.trim() || !groqKey.startsWith('gsk_')) {
+    const formatError = validateGroqKeyFormat(groqKey)
+    if (formatError) {
       setKeyStatus('invalid')
-      setValidationError('Key must start with "gsk_". Get yours at console.groq.com.')
+      setValidationError(formatError)
       return
     }
 

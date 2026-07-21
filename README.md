@@ -139,6 +139,26 @@ FastAPI automatically generates interactive API documentation. Ensure the backen
 
 ---
 
+## Running Tests
+
+### Backend
+
+```bash
+cd backend
+pytest tests/ -x -q
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm test
+```
+
+The frontend test suite uses Vitest and covers key utilities including task priority normalisation, Groq key format validation, schedule time/layer computations, and the `fetchWithGroqKey` API helper.
+
+---
+
 ## Troubleshooting
 
 - Blank UI on Vercel: Check that VITE_API_URL is set correctly in Vercel environment variables and redeploy with `vercel --prod`.
