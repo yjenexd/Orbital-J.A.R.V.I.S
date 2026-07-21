@@ -66,7 +66,7 @@ def _enable_rag(monkeypatch):
 
 class _FakeGcal:
     """Minimal Google Calendar stub: event listing returns nothing, which is all
-    ingest_context needs. The blackout check short-circuits before any mutation."""
+    ingest_context needs."""
 
     def events(self):
         return self

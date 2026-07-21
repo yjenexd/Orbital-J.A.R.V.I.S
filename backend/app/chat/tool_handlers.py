@@ -9,27 +9,6 @@ from app.clients import supabase
 from app.config import CURR_DATE
 
 
-BLACKOUT_START = None
-BLACKOUT_END = None
-
-
-def _is_blackout_date(date_str: str) -> bool:
-    if not BLACKOUT_START or not BLACKOUT_END:
-        return False
-    try:
-        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        return False
-    return BLACKOUT_START <= target_date <= BLACKOUT_END
-
-
-def _blackout_message() -> str:
-    return (
-        "Scheduling is blocked during the Summer Enterprise Programme blackout window "
-        "(2026-07-06 to 2026-07-17). Please pick a slot on 2026-07-05 or from 2026-07-18 onward."
-    )
-
-
 def _parse_hhmm(t: str) -> time_type:
     h, m = t[:5].split(":")
     return time_type(int(h), int(m))
@@ -233,9 +212,6 @@ def execute_tool_call(
 
         try:
             date_val = function_args.get("date")
-            if _is_blackout_date(date_val):
-                return json.dumps({"status": "error", "message": _blackout_message()})
-
             start_time_val = function_args.get("start_time")[:5]
             end_time_val = function_args.get("end_time")[:5]
             user_confirmed = function_args.get("user_confirmed", False)
@@ -329,9 +305,6 @@ def execute_tool_call(
             current_end = _current_end_raw[11:16] if len(_current_end_raw) > 15 else "23:59"
 
             date_val = function_args.get("date", current_date)
-            if _is_blackout_date(date_val):
-                return json.dumps({"status": "error", "message": _blackout_message()})
-
             start_time_val = function_args.get("start_time", current_time)[:5]
             end_time_val = function_args.get("end_time", current_end)[:5]
             user_confirmed = function_args.get("user_confirmed", False)

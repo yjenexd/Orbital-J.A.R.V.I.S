@@ -1,7 +1,7 @@
 import pytest
 
 from app.chat.tool_definitions import TOOLS
-from app.config import SYSTEM_PROMPT
+from app.prompts import CHAT_SYSTEM_PROMPT
 
 
 def _tool_description(name: str) -> str:
@@ -13,9 +13,9 @@ def _tool_description(name: str) -> str:
 
 
 def test_system_prompt_enforces_no_data_dump_and_no_markdown_tables():
-    assert "STRICT BAN ON DATA DUMPS" in SYSTEM_PROMPT
-    assert "STRICT BAN ON FORMATTING" in SYSTEM_PROMPT
-    assert "NEVER use Markdown tables" in SYSTEM_PROMPT
+    assert "STRICT BAN ON DATA DUMPS" in CHAT_SYSTEM_PROMPT
+    assert "STRICT BAN ON FORMATTING" in CHAT_SYSTEM_PROMPT
+    assert "NEVER use Markdown tables" in CHAT_SYSTEM_PROMPT
 
 
 @pytest.mark.skip(reason="Blackout window removed from system prompt; infrastructure preserved for future use")

@@ -31,3 +31,10 @@ class AgentState(TypedDict, total=False):
     agent_text: str                      # the LLM's text content (no-tool-call path)
     tool_statuses: list[dict]            # parsed {status, message} from each tool call
     final_reply: str                     # what we return + persist as the assistant msg
+
+    # Guardrail / evaluator state (see app.guardrails and the chat graph nodes).
+    validation_status: str               # last guardrail outcome slug (audit/trace)
+    guardrail_feedback: str              # error feedback threaded back to `agent` on retry
+    guardrail_route: str                 # internal routing hint set by guardrail/judge nodes
+    retry_count: int                     # generate->validate->retry loops used so far
+    judge_score: float | None            # LLM-judge accuracy score for this turn (or None)

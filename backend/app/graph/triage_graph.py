@@ -13,6 +13,9 @@ from openai import AsyncOpenAI
 from app.clients import supabase
 from app.config import CURR_DATE
 from app.graph.triage_state import TriageState
+from app.guardrails.output_validation import validate_triage_output
+from app.guardrails.screening import screen_text
+from app.prompts import build_triage_prompt
 
 try:  # LangGraph is a hard dep, but keep imports grouped/obvious.
     from langgraph.graph import END, START, StateGraph
@@ -23,40 +26,19 @@ except Exception:  # pragma: no cover
 _LEVEL_MAP = {"critical": "high", "high": "high", "medium": "medium", "low": "low"}
 
 
-def _build_triage_prompt(title: str, deadline: str, user_context: str) -> str:
-    return f"""
-    You are J.A.R.V.I.S's background task triage engine. Evaluate this task and output a JSON object scoring its priority.
-
-    Task Title: {title}
-    Deadline: {deadline}
-    Current Date: {CURR_DATE.isoformat()}
-    User Update Notes: '{user_context if user_context else "None"}'
-
-    EVALUATION CRITERIA:
-    Assess this based on a rigorous Computer Science workload.
-    - CRITICAL (Score 90-100): Overdue items, Orbital project deployments, major CS assignments, or Secondary 4 national exam prep due within 48 hours.
-    - HIGH (Score 75-89): Standard assignments or important errands due within 3 days.
-    - MEDIUM (Score 50-74): Routine maintenance (e.g., aquarium water changes, general studying) due within 4-7 days.
-    - LOW (Score 10-49): Distant deadlines (>7 days), minor personal errands, or hobby-related tasks.
-    * Adjust upwards by 15 points if the user notes explicitly state it is important, capping at 100.
-
-    Return EXACTLY this JSON format and nothing else. priority_level MUST be one of: "low", "medium", "high" — never "CRITICAL":
-    {{
-        "priority_level": "high",
-        "priority_score": 85,
-        "triage_rationale": "One short sentence explaining why."
-    }}
-    """
-
-
 async def score_priority(state: TriageState) -> dict:
     """LLM scoring call. On success -> priority_result; on any failure -> error."""
     client = AsyncOpenAI(
         base_url="https://api.groq.com/openai/v1",
         api_key=state["x_groq_api_key"],
     )
-    triage_prompt = _build_triage_prompt(
-        state["title"], state["deadline"], state.get("user_context", "")
+    # Screen the task title and user-supplied context (both untrusted free text)
+    # so a title/note crafted to read as an instruction can't steer the score.
+    triage_prompt = build_triage_prompt(
+        screen_text(state["title"]),
+        state["deadline"],
+        screen_text(state.get("user_context", "")),
+        CURR_DATE.isoformat(),
     )
 
     try:
@@ -66,6 +48,15 @@ async def score_priority(state: TriageState) -> dict:
             response_format={"type": "json_object"},
         )
         ai_data = json.loads(response.choices[0].message.content)
+
+        # Post-generation structural guardrail: the model must return the exact
+        # triage schema. Anything off-contract routes to the neutral fallback
+        # rather than writing a malformed score back to the task row.
+        schema_check = validate_triage_output(ai_data)
+        if not schema_check.passed:
+            print(f"Triage output failed schema for task {state['task_id']}: {schema_check.reason}")
+            return {"error": f"schema_invalid: {schema_check.reason}"}
+
         level_raw = ai_data.get("priority_level", "medium").lower()
         priority_level = _LEVEL_MAP.get(level_raw, "medium")
 

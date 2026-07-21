@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from openai import AsyncOpenAI
 
 from app.clients import get_current_user_id, get_google_calendar_service, get_groq_client, supabase
+from app.guardrails import redact_rows
+from app.prompts import BRIEFING_SYSTEM_PROMPT, build_briefing_prompt
 
 router = APIRouter()
 
@@ -71,32 +73,19 @@ async def day_at_a_glance_briefing(
                 "has_events": False,
             }
 
-        briefing_prompt = f"""
-        You are the user's elite, highly competent, and warm executive assistant. You speak in a natural, human voice-highly organized, proactive, and empathetic.
+        # Screen third-party content (event titles, task titles, and — the
+        # highest-risk channel — email sender/subject/summary) for injection
+        # payloads before it enters the briefing prompt.
+        safe_schedule = redact_rows(schedule_data, "event")
+        safe_tasks = redact_rows(tasks_res.data, "title")
+        safe_emails = redact_rows(email_res.data, "sender", "subject", "summary")
 
-        DATA STRUCTURE GUIDE:
-        - `Schedule`: Contains 'event' (description) and 'time'. 'protected' means it cannot be moved.
-        - `Tasks`: Contains 'title', 'deadline', and 'priority'.
-        - `Emails`: Contains recent inbox items with pre-generated summaries and 'urgency' levels.
-
-        INSTRUCTIONS:
-        Formulate a brief, conversational daily briefing. Do not just output a dry bulleted list; speak directly to the user as if you are standing by their desk reviewing the day.
-
-        1. Synthesize their schedule: Mention who they are meeting with, and explicitly flag any double-bookings or scheduling conflicts so they are aware.
-        2. Gently remind them of their highest-priority tasks and explicitly mention any urgent emails that need their immediate attention.
-        3. Keep your tone encouraging, supportive, and strictly under 5 sentences.
-        4. Start directly with the briefing (do not use generic AI greetings like "Good morning" or "Here is your summary").
-
-        LIVE DATABASE PAYLOAD:
-        Schedule: {schedule_data}
-        Pending Tasks: {tasks_res.data}
-        Emails: {email_res.data}
-        """
+        briefing_prompt = build_briefing_prompt(safe_schedule, safe_tasks, safe_emails)
 
         ai_response = await client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "You are a proactive AI secretary."},
+                {"role": "system", "content": BRIEFING_SYSTEM_PROMPT},
                 {"role": "user", "content": briefing_prompt},
             ],
         )
