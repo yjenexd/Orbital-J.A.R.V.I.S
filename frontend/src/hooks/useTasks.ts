@@ -3,12 +3,21 @@ import { API_URL } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 import type { Task } from '../types'
 
-export function useTasks() {
+export interface UseTasksResult {
+  tasks: Task[]
+  /** True until the first fetch settles, so the UI can show a skeleton on load. */
+  isLoading: boolean
+}
+
+export function useTasks(): UseTasksResult {
   const { session } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     if (!session) return
+
+    let cancelled = false
 
     const loadTasks = async () => {
       try {
@@ -21,11 +30,16 @@ export function useTasks() {
         }
 
         const data: unknown = await response.json()
+        if (cancelled) return
         if (typeof data === 'object' && data !== null && 'tasks' in data && Array.isArray(data.tasks)) {
           setTasks(data.tasks as Task[])
         }
       } catch (error) {
         console.error('Failed to fetch tasks', error)
+      } finally {
+        // Only the first fetch flips the loading flag; the 5s poll refreshes data
+        // silently so the skeleton doesn't flash on every tick.
+        if (!cancelled) setIsLoading(false)
       }
     }
 
@@ -34,8 +48,11 @@ export function useTasks() {
       void loadTasks()
     }, 5000)
 
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [session])
 
-  return tasks
+  return { tasks, isLoading }
 }

@@ -1,21 +1,72 @@
 import { Card, CardContent, Typography, Box, TextField, IconButton, Paper } from '@mui/material'
 import { Chat, Send } from '@mui/icons-material'
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type UIEvent } from 'react'
 import { API_URL, fetchWithGroqKey } from '../api'
 import { useAuth } from '../contexts/AuthContext'
 import type { ChatMessage } from '../types'
+
+// How many messages to render at once, and how many more to reveal each time the
+// user scrolls to the top. Keeps the DOM small on long histories.
+const PAGE_SIZE = 30
+// Treat the view as "at the bottom" within this many px, so auto-scroll only
+// fires when the user is actually following the conversation.
+const NEAR_BOTTOM_PX = 120
+// Reveal older messages once the user scrolls within this many px of the top.
+const TOP_LOAD_PX = 60
 
 export function ChatInterface() {
   const { session } = useAuth()
   const [inputText, setInputText] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isTyping, setIsTyping] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
+  const listRef = useRef<HTMLDivElement>(null)
   const messageEndRef = useRef<HTMLDivElement>(null)
+  // Kept in refs so the scroll handler reads fresh values without re-subscribing,
+  // and so a re-render isn't triggered on every scroll tick.
+  const isNearBottomRef = useRef(true)
+  const didInitialScrollRef = useRef(false)
+  const prevScrollHeightRef = useRef<number | null>(null)
 
+  const visibleMessages = messages.slice(-visibleCount)
+  const hasOlderMessages = visibleCount < messages.length
+
+  // Auto-scroll to the bottom on the first paint and whenever a new message
+  // arrives — but only if the user is already near the bottom, so we never yank
+  // them down while they're reading older history.
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isNearBottomRef.current) {
+      messageEndRef.current?.scrollIntoView({
+        behavior: didInitialScrollRef.current ? 'smooth' : 'auto',
+      })
+    }
+    didInitialScrollRef.current = true
   }, [messages, isTyping])
+
+  // After older messages are prepended, the content above the viewport grows;
+  // restore scrollTop so the user's view stays anchored instead of jumping.
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (el && prevScrollHeightRef.current !== null) {
+      el.scrollTop += el.scrollHeight - prevScrollHeightRef.current
+      prevScrollHeightRef.current = null
+    }
+  }, [visibleCount])
+
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    const el = event.currentTarget
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    isNearBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_PX
+
+    if (el.scrollTop <= TOP_LOAD_PX) {
+      setVisibleCount((count) => {
+        if (count >= messages.length) return count
+        prevScrollHeightRef.current = el.scrollHeight
+        return Math.min(count + PAGE_SIZE, messages.length)
+      })
+    }
+  }
 
   useEffect(() => {
     const userId = session?.user.id
@@ -60,6 +111,8 @@ export function ChatInterface() {
       created_at: Date.now().toString(),
     }
 
+    // The user just acted — snap back to the bottom even if they'd scrolled up.
+    isNearBottomRef.current = true
     setMessages((prev) => [...prev, userMessage])
     setInputText('')
     setIsTyping(true)
@@ -83,11 +136,12 @@ export function ChatInterface() {
       ])
       window.dispatchEvent(new Event('refreshSchedule'))
 
-    } catch (error: string | any) {
+    } catch (error: unknown) {
       console.error('Error communicating with the backend:', error)
 
+      const message = error instanceof Error ? error.message : String(error)
       const errorMessage =
-        error.message === 'API_KEY_MISSING'
+        message === 'API_KEY_MISSING'
           ? '⚠️ System offline: Please save your Groq API key in the Profile tab first.'
           : '⚠️ System error: Failed to connect to intelligence backend.'
 
@@ -133,10 +187,14 @@ export function ChatInterface() {
         </Box>
 
         <Box
+          ref={listRef}
+          onScroll={handleScroll}
+          data-testid="chat-scroll"
           sx={{
             flex: 1,
             minHeight: 0,
             overflowY: 'auto',
+            overscrollBehavior: 'contain',
             display: 'flex',
             flexDirection: 'column',
             gap: 1.1,
@@ -144,9 +202,19 @@ export function ChatInterface() {
             pr: 0.45,
           }}
         >
-          {messages.map((message, index) => (
+          {hasOlderMessages && (
+            <Typography
+              data-testid="chat-older-hint"
+              variant="caption"
+              sx={{ textAlign: 'center', color: '#9aa6bf', py: 0.5 }}
+            >
+              Scroll up to load earlier messages…
+            </Typography>
+          )}
+
+          {visibleMessages.map((message) => (
             <Box
-              key={index}
+              key={message.message_id}
               sx={{
                 display: 'flex',
                 justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
