@@ -63,7 +63,7 @@ function StatCard({
 }
 
 export function DashboardSummary() {
-  const tasks = useTasks()
+  const { tasks } = useTasks()
 
   const { doneCount, totalCount, urgentCount } = useMemo(() => {
     const total = tasks.length

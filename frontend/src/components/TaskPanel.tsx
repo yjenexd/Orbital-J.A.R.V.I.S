@@ -1,8 +1,8 @@
-import { Card, CardContent, Typography, Box, Checkbox, Chip } from '@mui/material'
+import { Card, CardContent, Typography, Box, Checkbox, Chip, Skeleton, CircularProgress } from '@mui/material'
 import { CheckBox, RadioButtonUnchecked } from '@mui/icons-material'
 import { useMemo } from 'react'
 import { useTasks } from '../hooks/useTasks'
-import { normalizeTaskPriority } from '../lib/taskPriority'
+import { normalizeTaskPriority, isTaskTriaging } from '../lib/taskPriority'
 
 type PriorityTheme = {
   itemBg: string
@@ -63,8 +63,22 @@ function formatPriorityLabel(priority: 'high' | 'medium' | 'low') {
   return 'Low'
 }
 
+function TaskSkeleton() {
+  return (
+    <Box data-testid="task-skeleton" sx={{ p: 1.3, borderRadius: '12px', border: '1px solid #e9eef7', bgcolor: '#fafbff' }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.1 }}>
+        <Skeleton variant="circular" width={20} height={20} />
+        <Box sx={{ flex: 1 }}>
+          <Skeleton variant="text" width="70%" height={20} />
+          <Skeleton variant="rounded" width={48} height={18} sx={{ mt: 0.8 }} />
+        </Box>
+      </Box>
+    </Box>
+  )
+}
+
 export function TaskPanel() {
-  const tasks = useTasks()
+  const { tasks, isLoading } = useTasks()
 
   const sortedTasks = useMemo(
     () => [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed)),
@@ -75,6 +89,8 @@ export function TaskPanel() {
     () => sortedTasks.filter((task) => task.completed).length,
     [sortedTasks]
   )
+
+  const showSkeleton = isLoading && sortedTasks.length === 0
 
   return (
     <Card
@@ -103,9 +119,14 @@ export function TaskPanel() {
         </Box>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', pr: 0.5 }}>
-          {sortedTasks.map((task) => {
+          {showSkeleton &&
+            Array.from({ length: 4 }).map((_, index) => <TaskSkeleton key={`skeleton-${index}`} />)}
+
+          {!showSkeleton &&
+            sortedTasks.map((task) => {
             const priority = normalizeTaskPriority(task)
             const theme = getPriorityTheme(priority, task.completed)
+            const triaging = isTaskTriaging(task)
 
             return (
               <Box
@@ -141,19 +162,31 @@ export function TaskPanel() {
                       {task.title}
                     </Typography>
 
-                    <Box sx={{ display: 'flex', gap: 0.6, mt: 0.8, flexWrap: 'wrap' }}>
-                      <Chip
-                        label={formatPriorityLabel(priority)}
-                        size="small"
-                        sx={{
-                          height: 21,
-                          bgcolor: theme.chipBg,
-                          color: theme.chipColor,
-                          border: `1px solid ${theme.chipBorder}`,
-                          fontWeight: 700,
-                          '& .MuiChip-label': { px: 0.8, fontSize: '0.7rem' },
-                        }}
-                      />
+                    <Box sx={{ display: 'flex', gap: 0.6, mt: 0.8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {triaging ? (
+                        <Box
+                          data-testid="task-triaging"
+                          sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}
+                        >
+                          <CircularProgress size={13} thickness={5} sx={{ color: '#8b97ab' }} />
+                          <Typography variant="caption" sx={{ color: '#8b97ab', fontWeight: 700 }}>
+                            Prioritizing…
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Chip
+                          label={formatPriorityLabel(priority)}
+                          size="small"
+                          sx={{
+                            height: 21,
+                            bgcolor: theme.chipBg,
+                            color: theme.chipColor,
+                            border: `1px solid ${theme.chipBorder}`,
+                            fontWeight: 700,
+                            '& .MuiChip-label': { px: 0.8, fontSize: '0.7rem' },
+                          }}
+                        />
+                      )}
 
                       {task.deadline && (
                         <Typography variant="caption" sx={{ color: '#7d8aa4', fontWeight: 600, alignSelf: 'center' }}>
@@ -168,7 +201,7 @@ export function TaskPanel() {
                       )}
                     </Box>
 
-                    {task.priority_score !== undefined && task.triage_rationale && (
+                    {!triaging && task.priority_score !== undefined && task.triage_rationale && (
                       <Typography
                         variant="caption"
                         sx={{ color: '#7f8ca6', display: 'block', mt: 0.45 }}
