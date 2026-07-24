@@ -1,0 +1,75 @@
+@startuml
+!theme plain
+autonumber
+
+actor User
+participant "Frontend" as FE
+participant "Backend\n(LangGraph Orchestrator)" as BE
+database "Vector Store" as DB
+participant "Retriever Node" as Retriever
+participant "Grader Node" as Grader
+participant "Router" as Router
+participant "Generation Node" as Gen
+participant "Fallback Node" as Fallback
+
+User -> FE : Submit Query
+FE -> BE : Forward Query
+
+note right of BE
+  **State Initialization:**
+  Initialize state object (query, retrieved_docs,
+  filtered_docs, answer, confidence/status)
+end note
+
+BE -> Retriever : Trigger graph execution
+Retriever -> DB : Fetch relevant chunks
+DB --> Retriever : Return chunks
+
+note right of Retriever
+  **Retrieval:**
+  Fetches relevant chunks from the
+  vector store/knowledge layer
+end note
+
+Retriever -> Grader : Pass retrieved documents
+
+note right of Grader
+  **Grading/Filtering:**
+  Evaluate chunk relevance 
+  and remove noisy context
+end note
+
+Grader -> Router : Pass filtered context
+
+note right of Router
+  **Conditional Routing:**
+  Check if sufficient high-quality 
+  context exists
+end note
+
+alt Context is sufficient
+    Router -> Gen : Route to Generation
+    note right of Gen
+      Compose grounded answer 
+      using the filtered context
+    end note
+    Gen --> BE : Return generated answer
+    
+else Context is insufficient
+    Router -> Fallback : Route to Fallback
+    note right of Fallback
+      Clarification, safe response, 
+      or alternate retrieval strategy
+    end note
+    Fallback --> BE : Return fallback response
+end
+
+BE --> FE : Return final response
+note right of FE
+  **Final Output:**
+  Returned with improved grounding 
+  and predictable behavior
+end note
+FE --> User : Display response
+
+@enduml

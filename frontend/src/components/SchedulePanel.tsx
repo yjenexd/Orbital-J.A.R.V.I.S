@@ -26,12 +26,12 @@ function normalize(time: string): string {
   return time.slice(0, 5)
 }
 
-function toMinutes(time: string): number {
+export function toMinutes(time: string): number {
   const [h, m] = normalize(time).split(':').map(Number)
   return h * 60 + m
 }
 
-function assignLayers(events: ScheduleEvent[]): LayeredEvent[] {
+export function assignLayers(events: ScheduleEvent[]): LayeredEvent[] {
   const sorted = [...events].sort((a, b) =>
     normalize(a.start_time).localeCompare(normalize(b.start_time))
   )

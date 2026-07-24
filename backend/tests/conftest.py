@@ -10,6 +10,10 @@ from fastapi.testclient import TestClient
 # tests that need retrieval monkeypatch embed_text / the RPC directly.
 os.environ.setdefault("RAG_SKIP_WARMUP", "1")
 
+# Keep the LLM-as-a-judge off by default so the offline suite makes no real model
+# calls; the dedicated guardrail tests opt in by clearing this env var.
+os.environ.setdefault("GUARDRAILS_JUDGE_DISABLED", "1")
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))

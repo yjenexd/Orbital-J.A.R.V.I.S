@@ -3,6 +3,7 @@ directly (not via HTTP) so each routing branch is exercised in isolation."""
 
 import asyncio
 
+import pytest
 from langchain_core.messages import AIMessage
 
 import app.chat.tool_handlers as tool_handlers
@@ -65,7 +66,7 @@ def _enable_rag(monkeypatch):
 
 class _FakeGcal:
     """Minimal Google Calendar stub: event listing returns nothing, which is all
-    ingest_context needs. The blackout check short-circuits before any mutation."""
+    ingest_context needs."""
 
     def events(self):
         return self
@@ -146,6 +147,7 @@ def test_tool_call_success_round_trip(monkeypatch):
     assert any(t.get("title") == "Finish CS2040S lab" for t in db["tasks"])
 
 
+@pytest.mark.skip(reason="Blackout window disabled (BLACKOUT_START=None); feature preserved for future use")
 def test_blackout_date_rejection_still_enforced(monkeypatch):
     db = {
         "messages": [],

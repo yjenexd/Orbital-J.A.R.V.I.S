@@ -1,0 +1,44 @@
+@startuml
+skinparam participantPadding 20
+skinparam boxPadding 10
+
+box "Frontend" #White
+participant "Chat UI" as UI
+end box
+
+box "FastAPI Backend" #LightBlue
+participant "Execute Chat" as API
+participant "Execution Engine" as Engine
+end box
+
+box "Services" #LightGray
+participant "Supabase" as DB
+participant "Google Calendar" as GC
+participant "LLM (Groq)" as LLM
+end box
+
+UI -> API: POST /chat (message, AuthToken, GroqKey)
+activate API
+
+API -> API: Fetch Database Context (Tasks/Events)
+API -> LLM: Initialize LLM (Context + Prompt + Tools)
+activate LLM
+LLM --> API: Tool Call Request
+deactivate LLM
+
+API -> Engine: Execute Tool Call
+activate Engine
+Engine -> DB: CRUD Operation
+Engine -> GC: Google Calendar API Call
+Engine --> API: Operation Result (Success/Error)
+deactivate Engine
+
+API -> LLM: Return Tool Result
+activate LLM
+LLM --> API: Human-Readable Reply
+deactivate LLM
+
+API --> UI: {reply: string}
+deactivate API
+
+@enduml
