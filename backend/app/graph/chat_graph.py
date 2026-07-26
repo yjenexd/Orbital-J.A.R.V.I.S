@@ -105,7 +105,7 @@ def load_history_and_log_user_message(state: AgentState) -> dict:
         .eq("user_id", user_id)
         .eq("role", "assistant")
         .order("created_at", desc=True)
-        .limit(1)
+        .limit(2)
         .execute()
     )
     recent_messages = history_result.data if history_result.data else []

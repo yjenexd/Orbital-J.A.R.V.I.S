@@ -131,7 +131,7 @@ def get_calendar(
 
 
 @router.get("/api/chat/history")
-async def get_chat_history(user_id: str = Depends(get_current_user_id), limit: int = 5):
+async def get_chat_history(user_id: str = Depends(get_current_user_id), limit: int = 30):
     try:
         response = (
             supabase.table("messages")
