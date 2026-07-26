@@ -1,4 +1,9 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+
+_SGT = timezone(timedelta(hours=8))
+
+def _today() -> date:
+    return datetime.now(_SGT).date()
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.auth.exceptions import RefreshError
@@ -35,7 +40,7 @@ def get_schedule(user_id: str = Depends(get_current_user_id)):
             supabase.table("schedule")
             .select("event_id, date, start_time, end_time, event, gcal_event_id")
             .eq("user_id", user_id)
-            .eq("date", date.today().isoformat())
+            .eq("date", _today().isoformat())
             .order("start_time", desc=False)
             .execute()
             .data
@@ -68,7 +73,7 @@ def get_calendar(
         service = get_google_calendar_service(refresh_token)
 
         if not time_min:
-            today = date.today()
+            today = _today()
             month_start = today.replace(day=1).isoformat() + "T00:00:00+08:00"
             if today.month == 12:
                 month_end = (
