@@ -1,4 +1,4 @@
-import { Card, CardContent, Typography, Box } from '@mui/material'
+import { Card, CardContent, Typography, Box, Tooltip } from '@mui/material'
 import { CalendarMonth } from '@mui/icons-material'
 import { useEffect, useState } from 'react'
 import { fetchWithGroqKey } from '../api'
@@ -10,7 +10,6 @@ interface ScheduleEvent {
   start_time: string
   end_time: string
   event: string
-  protected: boolean
 }
 
 interface LayeredEvent extends ScheduleEvent {
@@ -192,9 +191,21 @@ export function SchedulePanel() {
 
           {/* Events */}
           {layered.map(event => (
-            <Box
+            <Tooltip
               key={event.event_id}
-              title={`${event.event} · ${normalize(event.start_time)}–${normalize(event.end_time)}`}
+              title={
+                <Box>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.78rem' }}>{event.event}</Typography>
+                  <Typography sx={{ fontSize: '0.72rem', opacity: 0.85 }}>
+                    {normalize(event.start_time)} – {normalize(event.end_time)}
+                  </Typography>
+                </Box>
+              }
+              placement="top"
+              arrow
+              enterDelay={200}
+            >
+            <Box
               sx={{
                 position: 'absolute',
                 left: `${event.startPct}%`,
@@ -202,8 +213,8 @@ export function SchedulePanel() {
                 top: HEADER_H + event.layer * LAYER_H + 4,
                 height: LAYER_H - 8,
                 borderRadius: '7px',
-                bgcolor: event.protected ? '#e6f8ee' : '#edf1ff',
-                border: `1px solid ${event.protected ? '#bde4cf' : '#ccd9fa'}`,
+                bgcolor: '#edf1ff',
+                border: '1px solid #ccd9fa',
                 px: 0.75,
                 display: 'flex',
                 flexDirection: 'column',
@@ -217,7 +228,7 @@ export function SchedulePanel() {
               <Typography
                 noWrap
                 sx={{
-                  color: event.protected ? '#2f9364' : '#5a69ce',
+                  color: '#5a69ce',
                   fontWeight: 700,
                   fontSize: '0.7rem',
                   lineHeight: 1.25,
@@ -228,7 +239,7 @@ export function SchedulePanel() {
               <Typography
                 noWrap
                 sx={{
-                  color: event.protected ? '#3d9f72' : '#7888d4',
+                  color: '#7888d4',
                   fontSize: '0.6rem',
                   lineHeight: 1.25,
                 }}
@@ -236,6 +247,7 @@ export function SchedulePanel() {
                 {normalize(event.start_time)}–{normalize(event.end_time)}
               </Typography>
             </Box>
+            </Tooltip>
           ))}
 
           {events.length === 0 && (

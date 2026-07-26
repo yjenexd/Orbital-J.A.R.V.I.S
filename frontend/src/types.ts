@@ -9,7 +9,6 @@ export interface CalendarEvent {
     start_time: string;
     end_time: string;
     event: string;
-    protected: boolean;
     user_id: string;
 }
 

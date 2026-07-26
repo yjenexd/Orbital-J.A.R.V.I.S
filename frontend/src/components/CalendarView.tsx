@@ -15,7 +15,6 @@ interface ScheduleEvent {
   end_date: string
   end_time: string
   event: string
-  protected: boolean
 }
 
 // Coalesce the bursts of datesSet callbacks FullCalendar fires while the user
@@ -68,7 +67,7 @@ export function CalendarView() {
               return null
             }
 
-            const color = e.protected ? '#5fb98c' : '#63a6eb'
+            const color = '#63a6eb'
 
             // An event with no time (e.g. a deadline) is a valid all-day event.
             // Render it as such instead of dropping it or forcing it to midnight.
