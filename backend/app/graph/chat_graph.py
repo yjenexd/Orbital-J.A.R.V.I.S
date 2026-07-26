@@ -1,5 +1,10 @@
 import re
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+
+_SGT = timezone(timedelta(hours=8))
+
+def _today() -> date:
+    return datetime.now(_SGT).date()
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -90,7 +95,7 @@ def check_date_shortcut(state: AgentState) -> dict:
     straight to persist_reply."""
     normalized = (state["user_message"] or "").strip().lower()
     if _DATE_QUESTION_RE.fullmatch(normalized) or normalized in _DATE_QUESTION_LITERALS:
-        return {"final_reply": f"Today's date is {date.today().isoformat()}."}
+        return {"final_reply": f"Today's date is {_today().isoformat()}."}
     return {}
 
 
@@ -184,7 +189,7 @@ def ingest_context(state: AgentState) -> dict:
         try:
             gcal_service = get_google_calendar_service(google_refresh_token)
             print("[GCAL] Service ready.")
-            today = date.today()
+            today = _today()
             time_min = today.isoformat() + "T00:00:00+08:00"
             if today.month == 12:
                 time_max = (
@@ -233,8 +238,8 @@ def ingest_context(state: AgentState) -> dict:
         Pending Tasks: {safe_tasks}
         Calendar Events: {safe_events}
         User's Name: {user_name}
-        Current Date: {date.today().isoformat()}
-        TEMPORAL ANCHOR: Treat {date.today().isoformat()} as the only valid meaning of 'today', 'tonight', and 'this evening' unless the user explicitly provides another date. Ignore any conflicting date references from older conversation history.
+        Current Date: {_today().isoformat()}
+        TEMPORAL ANCHOR: Treat {_today().isoformat()} as the only valid meaning of 'today', 'tonight', and 'this evening' unless the user explicitly provides another date. Ignore any conflicting date references from older conversation history.
         """
 
     return {"db_context": db_context, "gcal_service": gcal_service}
