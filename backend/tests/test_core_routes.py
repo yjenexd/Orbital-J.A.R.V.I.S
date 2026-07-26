@@ -102,7 +102,7 @@ def test_get_calendar_maps_google_event_fields(client, monkeypatch):
                 "id": "evt-1",
                 "summary": "Project Sync",
                 "start": {"dateTime": "2026-06-22T09:30:00+08:00"},
-                "extendedProperties": {"private": {"protected": "true"}},
+                "extendedProperties": {"private": {}},
             }
         ]
     }
@@ -125,7 +125,6 @@ def test_get_calendar_maps_google_event_fields(client, monkeypatch):
     assert schedule[0]["date"] == "2026-06-22"
     assert schedule[0]["start_time"] == "09:30"
     assert schedule[0]["end_time"] == ""
-    assert schedule[0]["protected"] is True
 
 
 def test_get_schedule_returns_start_and_end_time_fields(client, monkeypatch):
@@ -141,7 +140,7 @@ def test_get_schedule_returns_start_and_end_time_fields(client, monkeypatch):
                         "start_time": "09:00",
                         "end_time": "10:00",
                         "event": "Morning run",
-                        "protected": False,
+
                         "gcal_event_id": "gc-1",
                     },
                     {
@@ -150,7 +149,7 @@ def test_get_schedule_returns_start_and_end_time_fields(client, monkeypatch):
                         "start_time": "14:00",
                         "end_time": "15:30",
                         "event": "Team sync",
-                        "protected": False,
+
                         "gcal_event_id": "gc-2",
                     },
                 ]

@@ -280,7 +280,6 @@ def execute_tool_call(
                 "date": date_val,
                 "start_time": start_time_val,
                 "end_time": end_time_val,
-                "protected": False,
                 "gcal_event_id": created["id"],
             }).execute()
         except Exception as e:

@@ -7,7 +7,6 @@ const makeEvent = (id: string, start: string, end: string) => ({
   start_time: start,
   end_time: end,
   event: `Event ${id}`,
-  protected: false,
 })
 
 describe('toMinutes', () => {

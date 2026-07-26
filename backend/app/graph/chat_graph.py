@@ -214,7 +214,6 @@ def ingest_context(state: AgentState) -> dict:
                         "event": event.get("summary", ""),
                         "date": start_event.get("dateTime", start_event.get("date", ""))[:10],
                         "time": start_event.get("dateTime", "T00:00:00")[11:19],
-                        "protected": extended.get("protected", "false") == "true",
                     }
                 )
         except Exception as e:
