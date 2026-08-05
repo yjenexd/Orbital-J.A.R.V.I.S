@@ -25,7 +25,7 @@ line below in for this comment:
 
 <img src="docs/screenshots/dashboard.png" alt="J.a.r.v.i.s dashboard" width="820"/>
 -->
-
+<img src=""C:\Users\yjene\OneDrive\Pictures\Screenshots\dashboard.png"" alt="J.a.r.v.i.s dashboard" width="820"/>
 </div>
 
 ---
@@ -62,7 +62,7 @@ docs/screenshots/chat-interface.png, then add:
 
 <p align="center"><img src="docs/screenshots/chat-interface.png" alt="Chat interface" width="420"/></p>
 -->
-
+<p align="center"><img src=""C:\Users\yjene\OneDrive\Pictures\Screenshots\chat-interface.png"" alt="Chat interface" width="420"/></p>
 ---
 
 ## 🚀 Quick Start
