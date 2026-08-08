@@ -61,7 +61,6 @@ docs/screenshots/chat-interface.png, then add:
 
 <p align="center"><img src="docs/screenshots/chat-interface.png" alt="Chat interface" width="420"/></p>
 -->
-<p align="center"><img src=""C:\Users\yjene\OneDrive\Pictures\Screenshots\chat-interface.png"" alt="Chat interface" width="420"/></p>
 ---
 
 ## 🚀 Quick Start
