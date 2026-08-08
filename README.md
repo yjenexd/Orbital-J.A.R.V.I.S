@@ -25,7 +25,6 @@ line below in for this comment:
 
 <img src="docs/screenshots/dashboard.png" alt="J.a.r.v.i.s dashboard" width="820"/>
 -->
-<img src=""C:\Users\yjene\OneDrive\Pictures\Screenshots\dashboard.png"" alt="J.a.r.v.i.s dashboard" width="820"/>
 </div>
 
 ---
